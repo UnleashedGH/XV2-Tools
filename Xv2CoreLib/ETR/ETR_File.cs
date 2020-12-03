@@ -50,6 +50,22 @@ namespace Xv2CoreLib.ETR
                 newEntry.Color2_B = BitConverter.ToSingle(bytes, section1Offset + 144);
                 newEntry.Color2_A = BitConverter.ToSingle(bytes, section1Offset + 148);
 
+<<<<<<< Updated upstream
+=======
+                newEntry.scaleShape = BitConverter.ToSingle(bytes, section1Offset + 152);
+
+
+                for (int j = 0; j < section3Count; j++)
+                {
+                    float X = BitConverter.ToSingle(bytes, section3Offset);
+                    float Y = BitConverter.ToSingle(bytes, section3Offset + 4);
+
+                    newEntry.ExtrudePoints.Add(new Point(X, Y));
+
+                    section3Offset += 8;
+                }
+
+>>>>>>> Stashed changes
                 //Parse main entry
                 etrFile.ETR_Entries.Add(newEntry);
                 section1Offset += 176;
@@ -101,6 +117,21 @@ namespace Xv2CoreLib.ETR
                 Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].Color2_B), section1Offset + 144);
                 Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].Color2_A), section1Offset + 148);
 
+<<<<<<< Updated upstream
+=======
+                Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].scaleShape), section1Offset + 152);
+
+
+
+                for (int j = 0; j < ETR_Entries[i].ExtrudePoints.Count; j++)
+                {
+                    Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].ExtrudePoints[j].X), section3Offset);
+                    Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].ExtrudePoints[j].Y), section3Offset + 4);
+
+                    section3Offset += 8;
+                }
+
+>>>>>>> Stashed changes
                 section1Offset += 176;
             }
 
@@ -230,6 +261,32 @@ namespace Xv2CoreLib.ETR
             }
 
         }
+<<<<<<< Updated upstream
+=======
+
+        //scales all the Extrude Points found in all Parts
+        public void ScaleETRParts(float scaleFactor)
+        {
+            foreach (var etrEntry in ETR_Entries)
+            {
+                if (etrEntry.ExtrudePoints.Count != 0)
+                {
+                    foreach (var point in etrEntry.ExtrudePoints)
+                    {
+                        point.X *= scaleFactor;
+                        point.Y *= scaleFactor;
+                    }
+                }
+                else
+                {
+                   //if an entry doesn't have extrud points, then it uses the "ScaleShape" param for the scaling
+
+                    etrEntry.scaleShape *= scaleFactor;
+                }
+            
+            }
+        }
+>>>>>>> Stashed changes
     }
 
     [Serializable]
@@ -238,6 +295,7 @@ namespace Xv2CoreLib.ETR
         public EMM.Material MaterialRef { get; set; }
 
         public ushort I_108 { get; set; } //EMM Index
+        public float scaleShape { get; set; }
         
 
         public float Color1_R { get; set; }

@@ -8,13 +8,24 @@ using YAXLib;
 namespace Xv2CoreLib.OCS
 {
     [YAXSerializeAs("OCS")]
-    class OCS_File
+   public class OCS_File
     {
         [YAXAttributeForClass]
         public ushort Version { get; set; } //0x6: 16 = pre 1.13, 20 = 1.13 or later
 
         [YAXCollection(YAXCollectionSerializationTypes.RecursiveWithNoContainingElement, EachElementName = "Partner")]
         public List<OCS_TableEntry> TableEntries { get; set; }
+
+
+        public static OCS_File Load(byte[] bytes)
+        {
+            return new Parser(bytes).GetOcsFile();
+        }
+
+        public byte[] SaveToBytes()
+        {
+            return new Deserializer(this).bytes.ToArray();
+        }
 
         public int CalculateDataOffset()
         {
@@ -33,12 +44,18 @@ namespace Xv2CoreLib.OCS
     }
 
     [YAXSerializeAs("Partner")]
-    public class OCS_TableEntry
+    public class OCS_TableEntry : IInstallable
     {
+        [YAXDontSerialize]
+        public int SortID { get { return int.Parse(Index); } }
+        [YAXDontSerialize]
+        public string Index { get { return PartnerID.ToString(); } set { PartnerID = int.Parse(value); } }
+
         [YAXAttributeForClass]
         [YAXSerializeAs("Partner_ID")]
-        public int Index { get; set; }
+        public int PartnerID { get; set; }
         [YAXCollection(YAXCollectionSerializationTypes.RecursiveWithNoContainingElement, EachElementName = "SkillList")]
+        [BindingSubList]
         public List<OCS_SubTableEntry> SubEntries { get; set; }
         
 
@@ -59,6 +76,7 @@ namespace Xv2CoreLib.OCS
         [YAXSerializeAs("Type")]
         public SkillType Skill_Type { get; set; }
         [YAXCollection(YAXCollectionSerializationTypes.RecursiveWithNoContainingElement, EachElementName = "Skill")]
+        [BindingSubList]
         public List<OCS_SubEntry> SubEntries { get; set; }
 
 
@@ -67,6 +85,14 @@ namespace Xv2CoreLib.OCS
     [YAXSerializeAs("Skill")]
     public class OCS_SubEntry
     {
+
+        #region WrapperProps
+        [YAXDontSerialize]
+        public int ID2 { get { return ushort.Parse(I_20); } set { I_20 = value.ToString(); } }
+
+
+
+        #endregion
 
         [YAXAttributeForClass]
         [YAXSerializeAs("I_04")]
@@ -79,7 +105,7 @@ namespace Xv2CoreLib.OCS
         public int I_12 { get; set; }
         [YAXAttributeForClass]
         [YAXSerializeAs("ID2")]
-        public int I_20 { get; set; }
+        public string I_20 { get; set; }
         [YAXAttributeForClass]
         [YAXSerializeAs("DLC_Flag")]
         public int I_24 { get; set; }

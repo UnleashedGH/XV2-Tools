@@ -15,7 +15,7 @@ namespace Xv2CoreLib.OCS
         List<byte> bytes;
         private OCS_File octFile = new OCS_File();
 
-        public Parser(string path, bool _writeXml)
+        public Parser(string path, bool _writeXml = false)
         {
             saveLocation = path;
             rawBytes = File.ReadAllBytes(path);
@@ -30,6 +30,24 @@ namespace Xv2CoreLib.OCS
             }
         }
 
+        public Parser(byte[] _bytes)
+        {
+            rawBytes = _bytes;
+            bytes = rawBytes.ToList();
+            if (bytes != null)
+            {
+                Parse();
+            }
+            else
+            {
+                octFile = null;
+            }
+        }
+
+        public OCS_File GetOcsFile()
+        {
+            return octFile;
+        }
         private void Parse()
         {
             octFile.Version = BitConverter.ToUInt16(rawBytes, 6);
@@ -45,7 +63,7 @@ namespace Xv2CoreLib.OCS
                 {
                     int subTableCount = BitConverter.ToInt32(rawBytes, firstTableOffset);
                     int subTableOffset = BitConverter.ToInt32(rawBytes, firstTableOffset + 4) + (16 * BitConverter.ToInt32(rawBytes, firstTableOffset + 8)) + 16;
-                    octFile.TableEntries.Add(new OCS_TableEntry() { Index = BitConverter.ToInt32(rawBytes, firstTableOffset + 12) });
+                    octFile.TableEntries.Add(new OCS_TableEntry() { PartnerID = BitConverter.ToInt32(rawBytes, firstTableOffset + 12) });
                     
                     if(subTableCount > 0)
                     {
@@ -77,7 +95,7 @@ namespace Xv2CoreLib.OCS
                                     I_04 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 4),
                                     I_08 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 8),
                                     I_12 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 12),
-                                    I_20 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 20)
+                                    ID2 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 20)
                                 });
 
                                 subDataOffset2 += 24;
@@ -89,7 +107,7 @@ namespace Xv2CoreLib.OCS
                                     I_04 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 4),
                                     I_08 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 8),
                                     I_12 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 12),
-                                    I_20 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 20),
+                                    ID2 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 20),
                                     I_24 = BitConverter.ToInt32(rawBytes, subDataOffset2 + 24)
                                 });
                                 subDataOffset2 += 28;

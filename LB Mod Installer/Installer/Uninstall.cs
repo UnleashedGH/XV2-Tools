@@ -38,6 +38,7 @@ using Xv2CoreLib.TTC;
 using Xv2CoreLib.SEV;
 using Xv2CoreLib.HCI;
 using Xv2CoreLib.CML;
+using Xv2CoreLib.OCS;
 
 namespace LB_Mod_Installer.Installer
 {
@@ -255,6 +256,9 @@ namespace LB_Mod_Installer.Installer
                     break;
                 case ".cml":
                     Uninstall_CML(path, file);
+                    break;
+                case ".ocs":
+                    Uninstall_OCS(path, file);
                     break;
                 default:
                     throw new Exception(string.Format("The filetype of \"{0}\" is unsupported. Uninstall failed.\n\nThis mod was likely installed by a newer version of the installer.", path));
@@ -1013,6 +1017,28 @@ namespace LB_Mod_Installer.Installer
             catch (Exception ex)
             {
                 string error = string.Format("Failed at CML uninstall phase ({0}).", path);
+                throw new Exception(error, ex);
+            }
+        }
+
+        private void Uninstall_OCS(string path, _File file)
+        {
+            try
+            {
+                OCS_File binaryFile = (OCS_File)GetParsedFile<OCS_File>(path, false);
+                OCS_File cpkBinFile = (OCS_File)GetParsedFile<OCS_File>(path, true);
+
+                Section section = file.GetSection(Sections.OCS_Entry);
+
+                if (section != null)
+                {
+                    UninstallEntries(binaryFile.TableEntries, (cpkBinFile != null) ? cpkBinFile.TableEntries : null, section.IDs);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                string error = string.Format("Failed at OCS uninstall phase ({0}).", path);
                 throw new Exception(error, ex);
             }
         }

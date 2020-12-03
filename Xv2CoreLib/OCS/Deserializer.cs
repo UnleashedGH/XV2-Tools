@@ -12,7 +12,7 @@ namespace Xv2CoreLib.OCS
     {
         string saveLocation;
         OCS_File ocsFile;
-        List<byte> bytes = new List<byte>() { 35, 79, 67, 83, 254, 255 };
+        public List<byte> bytes = new List<byte>() { 35, 79, 67, 83, 254, 255 };
 
         public Deserializer(string location)
         {
@@ -21,6 +21,12 @@ namespace Xv2CoreLib.OCS
             ocsFile = (OCS_File)serializer.DeserializeFromFile(location);
             Write();
             File.WriteAllBytes(saveLocation, bytes.ToArray());
+        }
+
+        public Deserializer(OCS_File _ocsFile)
+        {
+            ocsFile = _ocsFile;
+            Write();
         }
 
         private void Write()
@@ -46,7 +52,7 @@ namespace Xv2CoreLib.OCS
                 bytes.AddRange(BitConverter.GetBytes(subEntryCount));
                 bytes.AddRange(BitConverter.GetBytes(secondTableOffset));
                 bytes.AddRange(BitConverter.GetBytes(currentIndex1));
-                bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].Index));
+                bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].PartnerID));
                 currentIndex1 += subEntryCount;
             }
 
@@ -78,12 +84,12 @@ namespace Xv2CoreLib.OCS
 
                     for (int s = 0; s < subDataCount; s++)
                     {
-                        bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].Index));
+                        bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].PartnerID));
                         bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].SubEntries[a].SubEntries[s].I_04));
                         bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].SubEntries[a].SubEntries[s].I_08));
                         bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].SubEntries[a].SubEntries[s].I_12));
                         bytes.AddRange(BitConverter.GetBytes((int)ocsFile.TableEntries[i].SubEntries[a].Skill_Type));
-                        bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].SubEntries[a].SubEntries[s].I_20));
+                        bytes.AddRange(BitConverter.GetBytes(ocsFile.TableEntries[i].SubEntries[a].SubEntries[s].ID2));
 
                         if(ocsFile.Version == 20)
                         {

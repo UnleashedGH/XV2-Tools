@@ -48,6 +48,9 @@
         public const string QXD_Collection = "QXD_Collection";
         public const string ACB_Cue = "ACB_Cue";
         public const string PAL_Entry = "PAL_Entry";
+        public const string OCS_Entry = "OCS_Entry";
+
+
 
         public const string TTB_Entry = "TTB_Entry";
         public const string TTC_Entry = "TTC_Entry";

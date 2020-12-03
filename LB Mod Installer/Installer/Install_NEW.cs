@@ -46,6 +46,7 @@ using Xv2CoreLib.TTC;
 using Xv2CoreLib.SEV;
 using Xv2CoreLib.HCI;
 using Xv2CoreLib.CML;
+using Xv2CoreLib.OCS;
 
 namespace LB_Mod_Installer.Installer
 {
@@ -336,6 +337,9 @@ namespace LB_Mod_Installer.Installer
                     break;
                 case ".cml":
                     Install_CML(xmlPath, installPath);
+                    break;
+                case ".ocs":
+                    Install_OCS(xmlPath, installPath);
                     break;
                 default:
                     throw new InvalidDataException(string.Format("The filetype of \"{0}\" is not supported.", xmlPath));
@@ -1271,6 +1275,29 @@ namespace LB_Mod_Installer.Installer
 #endif
         }
 
+        private void Install_OCS(string xmlPath, string installPath)
+        {
+#if !DEBUG
+            try
+#endif
+            {
+                OCS_File xmlFile = zipManager.DeserializeXmlFromArchive<OCS_File>(GeneralInfo.GetPathInZipDataDir(xmlPath));
+                OCS_File binaryFile = (OCS_File)GetParsedFile<OCS_File>(installPath);
+
+                bindingManager.ParseProperties(xmlFile.TableEntries, binaryFile.TableEntries, installPath);
+                //Install entries
+                InstallEntries(xmlFile.TableEntries, binaryFile.TableEntries, installPath, Sections.OCS_Entry);
+
+            }
+#if !DEBUG
+            catch (Exception ex)
+            {
+                string error = string.Format("Failed at OCS install phase ({0}).", xmlPath);
+                throw new Exception(error, ex);
+            }
+#endif
+        }
+
         private void Install_ERS(string xmlPath, string installPath)
         {
 #if !DEBUG
@@ -1556,6 +1583,10 @@ namespace LB_Mod_Installer.Installer
                     return HCI_File.Parse(fileIO.GetFileFromGame(path, raiseEx, onlyFromCpk));
                 case ".cml":
                     return CML_File.Parse(fileIO.GetFileFromGame(path, raiseEx, onlyFromCpk));
+                case ".ocs":
+                    return OCS_File.Load(fileIO.GetFileFromGame(path, raiseEx, onlyFromCpk));
+                    
+                    
                 default:
                     throw new InvalidDataException(String.Format("GetParsedFileFromGame: The filetype of \"{0}\" is not supported.", path));
             }
@@ -1623,6 +1654,8 @@ namespace LB_Mod_Installer.Installer
                     return ((HCI_File)data).SaveToBytes();
                 case ".cml":
                     return ((CML_File)data).SaveToBytes();
+                case ".ocs":
+                    return ((OCS_File)data).SaveToBytes();
                 default:
                     throw new InvalidDataException(String.Format("GetBytesFromParsedFile: The filetype of \"{0}\" is not supported.", path));
             }

@@ -696,28 +696,29 @@ namespace LB_Mod_Installer.Installer
             try
 #endif
             {
-                EMB_File xmlFile = zipManager.DeserializeXmlFromArchive<EMB_File>(GeneralInfo.GetPathInZipDataDir(xmlPath));
-                EMB_File binaryFile = (EMB_File)GetParsedFile<EMB_File>(installPath);
-
+                EMB_File orgFile = (EMB_File)this.GetParsedFile<EMB_File>(installPath, false, true);
+                EMB_File installFile = new Xv2CoreLib.EMB_CLASS.Parser(this.zipManager.GetFileFromArchive(GeneralInfo.GetPathInZipDataDir(xmlPath))).embFile;
+                installFile.installMode = InstallMode.MatchName;
                 //Parse bindings
-                bindingManager.ParseProperties(xmlFile.Entry, binaryFile.Entry, installPath);
+                bindingManager.ParseProperties(installFile.Entry, orgFile.Entry, installPath);
 
                 //Install entries
-                if (xmlFile.Entry != null)
+                if (installFile.Entry != null)
                 {
-                    if (xmlFile.installMode == InstallMode.MatchName && !binaryFile.UseFileNames)
+                    if (installFile.installMode == InstallMode.MatchName && !orgFile.UseFileNames)
                         throw new Exception("InstallMode.NameMatch not possible when UseFileNames is false.");
 
-                    foreach (var entry in xmlFile.Entry)
+                    foreach (var entry in installFile.Entry)
                     {
-                        int idx = binaryFile.AddEntry(entry, entry.Index, xmlFile.installMode);
+                        int idx = orgFile.AddEntry(entry, entry.Index, installFile.installMode);
 
-                        if(xmlFile.installMode == InstallMode.MatchIndex)
+                        if(installFile.installMode == InstallMode.MatchIndex)
                             GeneralInfo.Tracker.AddID(installPath, Sections.EMB_Entry, idx.ToString());
-                        else if (xmlFile.installMode == InstallMode.MatchName)
+                        else if (installFile.installMode == InstallMode.MatchName)
                             GeneralInfo.Tracker.AddID(installPath, Sections.EMB_Entry, entry.Name);
                     }
                 }
+
             }
 #if !DEBUG
             catch (Exception ex)

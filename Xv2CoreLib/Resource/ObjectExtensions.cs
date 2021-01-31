@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Reflection;
 using System.ArrayExtensions;
+using System.Linq;
 
 namespace System
 {
@@ -65,6 +66,36 @@ namespace System
         public static T Copy<T>(this T original)
         {
             return (T)Copy((Object)original);
+        }
+
+
+        //Notify
+        /// <summary>
+        /// Invokes NotifyPropertyChanged for all properties on this object. NOTE: Requires NotifyPropertyChanged to be public!
+        /// </summary>
+        public static void NotifyPropsChanged(this object instance)
+        {
+            foreach (var prop in instance.GetType().GetProperties())
+            {
+                MethodInfo function = instance.GetType().GetMethod("NotifyPropertyChanged");
+
+                if(function != null)
+                    function.Invoke(instance, new object[] { prop.Name });
+            }
+        }
+    
+        public static bool Compare(this object instance, object compareObj, params string[] exclusions)
+        {
+            foreach(var prop in instance.GetType().GetProperties())
+            {
+                if ((prop.PropertyType == typeof(string) || prop.PropertyType.IsPrimitive || prop.PropertyType.IsValueType)
+                    && (prop.SetMethod != null && prop.GetMethod != null) && !exclusions.Contains(prop.Name))
+                {
+                    if (prop.GetValue(instance) != prop.GetValue(compareObj)) return false;
+                }
+            }
+
+            return true;
         }
     }
 

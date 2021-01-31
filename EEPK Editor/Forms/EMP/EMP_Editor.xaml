@@ -1,30 +1,53 @@
-﻿<Window x:Class="EEPK_Organiser.Forms.EMP.EMP_Editor"
+﻿<Controls:MetroWindow x:Class="EEPK_Organiser.Forms.EMP.EMP_Editor"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:ex="http://schemas.xceed.com/wpf/xaml/toolkit"
-        xmlns:local="clr-namespace:EEPK_Organiser"
+        xmlns:local="clr-namespace:EEPK_Organiser.Forms.EMP"
         xmlns:converters="clr-namespace:EEPK_Organiser.Converters"
         xmlns:system="clr-namespace:System;assembly=mscorlib"
         xmlns:emp="clr-namespace:Xv2CoreLib.EMP;assembly=Xv2CoreLib"
         xmlns:empAnim="clr-namespace:Xv2CoreLib.EMP;assembly=Xv2CoreLib"
         xmlns:utils="clr-namespace:EEPK_Organiser.Utils"
+        xmlns:Controls="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+        xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        xmlns:undoRedo="clr-namespace:Xv2CoreLib.Resource.UndoRedo;assembly=Xv2CoreLib"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
-        Title="EMP Editor" Height="565.065" Width="1110" ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen" AllowDrop="True" WindowStyle="ThreeDBorderWindow">
+        x:Name="empEditorWindow" Title="EMP Editor" Height="575" Width="1110" ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen" AllowDrop="True" WindowStyle="ThreeDBorderWindow">
+    <Window.InputBindings>
+        <KeyBinding Key="Z" Modifiers="Ctrl"  Command="{Binding Source={x:Static undoRedo:UndoManager.Instance}, Path=UndoCommand}"/>
+        <KeyBinding Key="Y" Modifiers="Ctrl"  Command="{Binding Source={x:Static undoRedo:UndoManager.Instance}, Path=RedoCommand}"/>
+    </Window.InputBindings>
     <Window.Resources>
         <converters:ColorFormatConverter x:Key="RgbConverter" />
         <converters:NullToFalseConverter x:Key="NullToFalse" />
 
-
+        <ObjectDataProvider x:Key="AnimTypeEnum" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="emp:Type0+Parameter"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
     </Window.Resources>
-    <Grid>
+    <Grid x:Name="rootGrid">
 
-        <TabControl x:Name="mainTabControl" HorizontalAlignment="Left" Height="505" VerticalAlignment="Top" Width="1095">
-            <TabItem Header="Particle Effects">
-                <Grid Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" Margin="0,0,-6.836,-0.055">
-                    <TreeView x:Name="empTree" ItemsSource="{Binding empFile.ParticleEffects}" HorizontalAlignment="Left" Height="430" Margin="41,15,0,0" VerticalAlignment="Top" Width="282" SelectedItemChanged="empTree_SelectedItemChanged" PreviewKeyDown="empTree_KeyDown">
+        <Controls:MetroTabControl x:Name="mainTabControl" HorizontalAlignment="Left" Height="537" VerticalAlignment="Top" Width="1095" Margin="0, 2">
+            <Controls:MetroTabItem Header="Particle Effects" Controls:ControlsHelper.HeaderFontSize="16">
+                <Grid Margin="0,0,-6.836,-0.055">
 
+                    <TreeView x:Name="empTree" ItemsSource="{Binding empFile.ParticleEffects}" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" HorizontalAlignment="Left" Height="487" Margin="41,15,0,0" VerticalAlignment="Top" Width="282" SelectedItemChanged="empTree_SelectedItemChanged">
+                        <TreeView.InputBindings>
+                            <KeyBinding Key="Delete" Command="{Binding RemoveParticleEffect_Command}"/>
+                            <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddParticleEffect_Command}"/>
+                            <KeyBinding Key="C" Modifiers="Ctrl" Command="{Binding Copy_Command}"/>
+                            <KeyBinding Key="V" Modifiers="Ctrl" Command="{Binding Paste_Command}"/>
+                            <KeyBinding Key="V" Modifiers="Ctrl+Alt" Command="{Binding PasteChild_Command}"/>
+                            <KeyBinding Key="V" Modifiers="Shift" Command="{Binding PasteValues_Command}"/>
+                            <KeyBinding Key="Up" Modifiers="Ctrl" Command="{Binding MoveUp_Command}"/>
+                            <KeyBinding Key="Down" Modifiers="Ctrl" Command="{Binding MoveDown_Command}"/>
+                            <KeyBinding Key="H" Modifiers="Ctrl" Command="{Binding HueAdjustment_Command}"/>
+                        </TreeView.InputBindings>
                         <TreeView.ItemContainerStyle>
                             <Style TargetType="TreeViewItem">
                                 <EventSetter Event="TreeViewItem.MouseRightButtonDown" Handler="TreeViewItem_MouseRightButtonDown"/>
@@ -36,23 +59,24 @@
                         </TreeView.Resources>
                         <TreeView.ItemTemplate>
                             <HierarchicalDataTemplate DataType="{x:Type emp:ParticleEffect}" ItemsSource="{Binding ChildParticleEffects}">
-                                <TextBlock Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MinWidth="100">
+                                <TextBlock Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MinWidth="100" Tag="{Binding DataContext, ElementName=empEditorWindow}">
                                     <TextBlock.ContextMenu>
-                                        <ContextMenu StaysOpen="true">
-                                            <MenuItem Header="Add New Above" Click="AddNewAbove_Click"/>
-                                            <MenuItem Header="Add New Below" Click="AddNewBelow_Click"/>
-                                            <MenuItem Header="Add New As Child" Click="AddParticleEffectAsChild_Click"/>
-                                            <MenuItem Header="Remove" Click="RemoveParticleEffect_Click"/>
+                                        <ContextMenu StaysOpen="true" FontSize="12">
+                                            <MenuItem Header="Add New Above" Command="{Binding PlacementTarget.Tag.AddNewAbove_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Add New Below" Command="{Binding PlacementTarget.Tag.AddNewBelow_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Add New As Child" Command="{Binding PlacementTarget.Tag.AddParticleEffectAsChild_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Remove" Command="{Binding PlacementTarget.Tag.RemoveParticleEffect_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                             <Separator/>
-                                            <MenuItem Header="Move Up" Click="MoveUp_Click"/>
-                                            <MenuItem Header="Move Down" Click="MoveDown_Click"/>
+                                            <MenuItem Header="Move Up" Command="{Binding PlacementTarget.Tag.MoveUp_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Move Down" Command="{Binding PlacementTarget.Tag.MoveDown_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                             <Separator/>
-                                            <MenuItem Header="Copy" Click="Copy_Click"/>
-                                            <MenuItem Header="Paste" Click="Paste_Click"/>
-                                            <MenuItem Header="Paste As Child" Click="PasteChild_Click"/>
-                                            <MenuItem Header="Paste Values" Click="PasteValues_Click"/>
+                                            <MenuItem Header="Copy" Command="{Binding PlacementTarget.Tag.Copy_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Paste" Command="{Binding PlacementTarget.Tag.Paste_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Paste As Child" Command="{Binding PlacementTarget.Tag.PasteChild_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Paste Values" Command="{Binding PlacementTarget.Tag.PasteValues_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                             <Separator/>
-                                            <MenuItem Header="Hue Adjustment" Click="HueAdjustment_Click"/>
+                                            <MenuItem Header="Hue Adjustment" Command="{Binding PlacementTarget.Tag.HueAdjustment_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            <MenuItem Header="Hue Set" Command="{Binding PlacementTarget.Tag.HueSet_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                                         </ContextMenu>
                                     </TextBlock.ContextMenu>
                                 </TextBlock>
@@ -60,9 +84,9 @@
                         </TreeView.ItemTemplate>
                     </TreeView>
 
-                    <TabControl x:Name="tabControl_ParticleEffect" HorizontalAlignment="Left" Height="444" Margin="335,10,0,-0.182" VerticalAlignment="Top" Width="753">
-                        <TabItem Header="General">
-                            <Grid Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" Margin="0,0,0.055,0">
+                    <Controls:MetroTabControl x:Name="tabControl_ParticleEffect" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" HorizontalAlignment="Left" Height="492" Margin="335,10,0,0" VerticalAlignment="Top" Width="753">
+                        <Controls:MetroTabItem Header="General" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid Margin="0,0,0.055,0">
                                 <TextBox x:Name="general_Name" Text="{Binding SelectedItem.Name, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="134,57,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="253"/>
                                 <Label Content="Name" HorizontalAlignment="Left" Margin="30,55,0,0" VerticalAlignment="Top" Width="104" HorizontalContentAlignment="Right" ToolTip="The name of the Particle Effect. Has a maximum allowed length of 32 characters."/>
                                 <TextBox x:Name="general_ParticleLifetime" Text="{Binding SelectedItem.I_40, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="134,118,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -79,7 +103,7 @@
                                 <Label Content="Max Particles (frame)" HorizontalAlignment="Left" Margin="0,207,0,0" VerticalAlignment="Top" Width="134" HorizontalContentAlignment="Right" ToolTip="The maximum amount of particles that can be created in a single frame."/>
                                 <TextBox x:Name="general_MaxParticlesPerFrameAddRandom" Text="{Binding SelectedItem.I_54, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="305,211,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Variance" HorizontalAlignment="Left" Margin="224,207,0,0" VerticalAlignment="Top" Width="81" HorizontalContentAlignment="Right"/>
-                                <GroupBox Header="Position" HorizontalAlignment="Left" Height="164" Margin="479,25,0,0" VerticalAlignment="Top" Width="241">
+                                <GroupBox Header="Position" HorizontalAlignment="Left" Height="167" Margin="479,25,0,0" VerticalAlignment="Top" Width="241">
                                     <Grid>
                                         <TextBox x:Name="general_Transform_X" Text="{Binding SelectedItem.F_64, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="32,12,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="57"/>
                                         <Label Content="X" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" Width="22" HorizontalContentAlignment="Right"/>
@@ -100,7 +124,7 @@
 
                                     </Grid>
                                 </GroupBox>
-                                <GroupBox Header="Rotation" HorizontalAlignment="Left" Height="164" Margin="479,208,0,0" VerticalAlignment="Top" Width="241">
+                                <GroupBox Header="Rotation" HorizontalAlignment="Left" Height="169" Margin="479,208,0,0" VerticalAlignment="Top" Width="241">
                                     <Grid>
                                         <TextBox x:Name="general_Transform_X1" Text="{Binding SelectedItem.F_96, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="32,12,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="57"/>
                                         <Label Content="X" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top" Width="22" HorizontalContentAlignment="Right"/>
@@ -144,11 +168,11 @@
                                 <Label Content="I__136" HorizontalAlignment="Left" Margin="322,362,0,0" VerticalAlignment="Top" Width="55" HorizontalContentAlignment="Right"/>
                             </Grid>
 
-                        </TabItem>
-                        <TabItem x:Name="tab_TexturePart" Header="Texture Part">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="tab_TexturePart" Header="Texture Part" Controls:ControlsHelper.HeaderFontSize="16">
                             <TabControl>
                                 <TabItem Header="Color/Material">
-                                    <Grid x:Name="grid_TexturePart" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}" Margin="0,0,-0.055,0">
+                                    <Grid x:Name="grid_TexturePart" Margin="0,0,-0.055,0">
                                         <ex:ColorCanvas x:Name="ColorCanvas_Color1" Margin="10,83,0,0" SelectedColorChanged="ColorCanvas_Color1_SelectedColorChanged" HorizontalAlignment="Left" VerticalAlignment="Top" Width="236" Height="275" SelectedColor="{Binding SelectedItem.Type_Texture.Color1, ElementName=empTree}"/>
                                         <ex:ColorCanvas x:Name="ColorCanvas_Color2" Margin="251,83,0,0" Height="275" Width="236" HorizontalAlignment="Left" VerticalAlignment="Top" SelectedColor="{Binding SelectedItem.Type_Texture.Color2, ElementName=empTree}"/>
                                         <TextBlock x:Name="textBlock_AddedRandomSafe" HorizontalAlignment="Left" Margin="998,388,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="67"/>
@@ -170,29 +194,40 @@
                                         <TextBox IsReadOnly="True" IsEnabled="False" Text="{Binding SelectedItem.Type_Texture.MaterialRef.Str_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="78,8,0,0" TextWrapping="NoWrap" VerticalAlignment="Top" Width="177"/>
                                         <Label Content="Material" HorizontalAlignment="Left" Margin="8,7,0,0" VerticalAlignment="Top" Width="64" HorizontalContentAlignment="Right"/>
                                         <GroupBox Header="Textures" ToolTip="The textures assigned to this Particle Effect." HorizontalAlignment="Left" Height="164" Margin="492,10,-9.636,0" VerticalAlignment="Top" Width="242">
-                                            <Grid>
-                                                <DataGrid x:Name="textureRefDataGrid" HorizontalAlignment="Left" Height="121" Margin="35,9,0,0" VerticalAlignment="Top" Width="185" AutoGenerateColumns="False" ItemsSource="{Binding SelectedItem.Type_Texture.TextureEntryRef, ElementName=empTree}" CanUserDeleteRows="False" CanUserAddRows="False">
+                                            <Grid Margin="0,0,0.333,-5">
+                                                <DataGrid x:Name="textureRefDataGrid" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" HorizontalAlignment="Left" Height="121" Margin="35,2,0,0" VerticalAlignment="Top" Width="185" AutoGenerateColumns="False" ItemsSource="{Binding SelectedItem.Type_Texture.TextureEntryRef, ElementName=empTree}" CanUserDeleteRows="False" CanUserAddRows="False">
                                                     <DataGrid.Resources>
                                                         <utils:BindingProxy x:Key="proxy" Data="{Binding}" />
                                                     </DataGrid.Resources>
+                                                    <DataGrid.InputBindings>
+                                                        <KeyBinding Key="Delete" Command="{Binding TexturePart_RemoveTextureCommand}"/>
+                                                        <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding TexturePart_AddTextureCommand}"/>
+                                                    </DataGrid.InputBindings>
+
+                                                    <DataGrid.ContextMenu>
+                                                        <ContextMenu Controls:ControlsHelper.HeaderFontSize="12">
+                                                            <MenuItem Header="Add" Command="{Binding TexturePart_RemoveTextureCommand}"/>
+                                                            <MenuItem Header="Delete" Command="{Binding TexturePart_RemoveTextureCommand}"/>
+                                                        </ContextMenu>
+                                                    </DataGrid.ContextMenu>
                                                     <DataGrid.Columns>
-                                                        <DataGridTemplateColumn Header="Texture Entries">
+                                                        <DataGridTemplateColumn Header="Texture Entries" Width="*">
                                                             <DataGridTemplateColumn.CellTemplate>
                                                                 <DataTemplate>
-                                                                    <ComboBox SelectedItem="{Binding TextureRef, UpdateSourceTrigger=PropertyChanged}" DisplayMemberPath="ToolName" ItemsSource="{Binding Data.empFile.Textures, Source={StaticResource proxy}}" />
+                                                                    <ComboBox SelectedItem="{Binding UndoableTextureRef, UpdateSourceTrigger=PropertyChanged}" DisplayMemberPath="ToolName" ItemsSource="{Binding Data.empFile.Textures, Source={StaticResource proxy}}" />
                                                                 </DataTemplate>
                                                             </DataGridTemplateColumn.CellTemplate>
                                                             <DataGridTemplateColumn.CellEditingTemplate>
                                                                 <DataTemplate>
-                                                                    <ComboBox SelectedItem="{Binding TextureRef, UpdateSourceTrigger=PropertyChanged}" DisplayMemberPath="ToolName" ItemsSource="{Binding Data.empFile.Textures, Source={StaticResource proxy}}" />
+                                                                    <ComboBox SelectedItem="{Binding UndoableTextureRef, UpdateSourceTrigger=PropertyChanged}" DisplayMemberPath="ToolName" ItemsSource="{Binding Data.empFile.Textures, Source={StaticResource proxy}}" />
                                                                 </DataTemplate>
                                                             </DataGridTemplateColumn.CellEditingTemplate>
 
                                                         </DataGridTemplateColumn>
-
+                                                        <DataGridTextColumn Width="40"/>
                                                     </DataGrid.Columns>
                                                 </DataGrid>
-                                                <Button HorizontalAlignment="Left" Margin="4,12,0,0" VerticalAlignment="Top" Width="26" Height="24" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="TexturePart_AddTextureReference_Click" ToolTip="Add a texture reference">
+                                                <Button HorizontalAlignment="Left" Margin="4,12,0,0" VerticalAlignment="Top" Width="26" Height="24" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Command="{Binding TexturePart_AddTextureCommand}" ToolTip="Add a texture reference">
                                                     <Button.Background>
                                                         <ImageBrush ImageSource="{StaticResource plus}" Stretch="Uniform">
                                                             <ImageBrush.RelativeTransform>
@@ -206,7 +241,7 @@
                                                         </ImageBrush>
                                                     </Button.Background>
                                                 </Button>
-                                                <Button HorizontalAlignment="Left" Margin="4,41,0,0" VerticalAlignment="Top" Width="26" Height="24" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="TexturePart_RemoveTextureReference_Click" ToolTip="Remove the selected texture reference">
+                                                <Button HorizontalAlignment="Left" Margin="4,41,0,0" VerticalAlignment="Top" Width="26" Height="24" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Command="{Binding TexturePart_RemoveTextureCommand}" ToolTip="Remove the selected texture reference">
                                                     <Button.Background>
                                                         <ImageBrush ImageSource="{StaticResource delete}" Stretch="Uniform">
                                                             <ImageBrush.RelativeTransform>
@@ -225,10 +260,10 @@
                                         </GroupBox>
                                         <Label Content="Color1" HorizontalAlignment="Left" Margin="61,53,0,0" VerticalAlignment="Top" Width="104" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="16"/>
                                         <Label Content="Color2" HorizontalAlignment="Left" Margin="310,53,0,0" VerticalAlignment="Top" Width="104" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="16"/>
-                                        <Button Click="Material_ChangeMaterial_Click" Content="Change" HorizontalAlignment="Left" Margin="260,10,0,0" VerticalAlignment="Top" Width="70"/>
-                                        <Button Click="Material_Goto_Click" Content="Go To" HorizontalAlignment="Left" Margin="412,10,0,0" VerticalAlignment="Top" Width="70"/>
+                                        <Button Click="Material_ChangeMaterial_Click" Content="Change" HorizontalAlignment="Left" Margin="262,8,0,0" VerticalAlignment="Top" Width="70"/>
+                                        <Button Click="Material_Goto_Click" Content="Go To" HorizontalAlignment="Left" Margin="414,8,0,0" VerticalAlignment="Top" Width="70"/>
                                         <Separator HorizontalAlignment="Left" Height="11" Margin="0,37,0,0" VerticalAlignment="Top" Width="487"/>
-                                        <Button Click="Material_RemoveMaterialReference_Click" Content="Remove" HorizontalAlignment="Left" Margin="335,10,0,0" VerticalAlignment="Top" Width="70"/>
+                                        <Button Click="Material_RemoveMaterialReference_Click" Content="Remove" HorizontalAlignment="Left" Margin="337,8,0,0" VerticalAlignment="Top" Width="70"/>
 
                                     </Grid>
 
@@ -288,9 +323,9 @@
                                     </Grid>
                                 </TabItem>
                             </TabControl>
-                        </TabItem>
-                        <TabItem x:Name="Tab_VerticalDistribution" Header="Vertical Distribution">
-                            <Grid x:Name="grid_VerticalDistribution" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_VerticalDistribution" Header="Vertical Distribution" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_VerticalDistribution">
                                 <TextBox x:Name="verticalDistibution_F_00" Text="{Binding SelectedItem.FloatPart_00_01.F_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Position Offset Y" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
                                 <TextBox x:Name="verticalDistibution_F_04" Text="{Binding SelectedItem.FloatPart_00_01.F_04, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -309,9 +344,9 @@
                                 <Label Content="F__28" HorizontalAlignment="Left" Margin="62,162,0,0" VerticalAlignment="Top" Width="104" HorizontalContentAlignment="Right"/>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_SphericalDistribution" Header="SphericalDistribution">
-                            <Grid x:Name="grid_SphericalDistribution" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_SphericalDistribution" Header="SphericalDistribution" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_SphericalDistribution">
                                 <TextBox x:Name="sphericalDistibution_F_00" Text="{Binding SelectedItem.FloatPart_01_01.F_16, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Sphere Radius" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right" ToolTip="SphereRadius_ForRandomPositionOnSphere"/>
                                 <TextBox x:Name="sphericalDistibution_F_04" Text="{Binding SelectedItem.FloatPart_01_01.F_20, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -322,9 +357,9 @@
                                 <Label Content="Variance" HorizontalAlignment="Left" Margin="280,72,0,0" VerticalAlignment="Top" Width="104" HorizontalContentAlignment="Right"/>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_ShapePerimeterDistribution" Header="ShapePerimeterDistribution">
-                            <Grid x:Name="grid_ShapePerimeterDistribution" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_ShapePerimeterDistribution" Header="ShapePerimeterDistribution" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_ShapePerimeterDistribution">
                                 <TextBox x:Name="shapePerimeterDistibution_F_00" Text="{Binding SelectedItem.FloatPart_02_01.F_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Position Offset Y" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
                                 <TextBox x:Name="shapePerimeterDistibution_F_04" Text="{Binding SelectedItem.FloatPart_02_01.F_04, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -351,9 +386,9 @@
                                 <Label Content="F__44" HorizontalAlignment="Left" Margin="12,249,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_ShapeAreaDistribution" Header="ShapeAreaDistribution">
-                            <Grid x:Name="grid_ShapeAreaDistribution" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_ShapeAreaDistribution" Header="ShapeAreaDistribution" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_ShapeAreaDistribution">
                                 <TextBox x:Name="shapeAreaDistibution_F_00" Text="{Binding SelectedItem.FloatPart_03_01.F_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Position Offset Y" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
                                 <TextBox x:Name="shapeAreaDistibution_F_04" Text="{Binding SelectedItem.FloatPart_03_01.F_04, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -380,9 +415,9 @@
                                 <Label Content="F__44" HorizontalAlignment="Left" Margin="12,249,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_AutoOriented" Header="AutoOriented">
-                            <Grid x:Name="grid_AutoOriented" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_AutoOriented" Header="AutoOriented" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_AutoOriented">
                                 <TextBox x:Name="autoOriented_F_00" Text="{Binding SelectedItem.FloatPart_00_02.F_16, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Rotation" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right" ToolTip="SphereRadius_ForRandomPositionOnSphere"/>
                                 <TextBox x:Name="autoOriented_F_04" Text="{Binding SelectedItem.FloatPart_00_02.F_20, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -393,9 +428,9 @@
                                 <Label Content="Variance" HorizontalAlignment="Left" Margin="280,72,0,0" VerticalAlignment="Top" Width="104" HorizontalContentAlignment="Right"/>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_Default" Header="Default">
-                            <Grid x:Name="grid_Default" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_Default" Header="Default" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_Default">
                                 <TextBox x:Name="default_F_00" Text="{Binding SelectedItem.FloatPart_02_02.F_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Angle Rotation" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
                                 <TextBox x:Name="default_F_04" Text="{Binding SelectedItem.FloatPart_02_02.F_04, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -419,8 +454,8 @@
                                 </GroupBox>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_ConeExtrude" Header="ConeExtrude">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_ConeExtrude" Header="ConeExtrude" Controls:ControlsHelper.HeaderFontSize="16">
                             <Grid x:Name="grid_ConeExtrude">
                                 <TextBox x:Name="coneExtrude_I_00" Text="{Binding SelectedItem.Type_Struct3.I_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Duration" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
@@ -432,7 +467,7 @@
                                 <Label Content="I__08" HorizontalAlignment="Left" Margin="12,103,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
                                 <TextBox x:Name="coneExtrude_I_10" Text="{Binding SelectedItem.Type_Struct3.I_10, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,135,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="I__10" HorizontalAlignment="Left" Margin="12,133,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
-                                <DataGrid x:Name="dataGrid_coneExtrude" HorizontalAlignment="Left" Height="194" Margin="96,191,0,0" VerticalAlignment="Top" Width="609" ItemsSource="{Binding SelectedItem.Type_Struct3.FloatList, ElementName=empTree}" AutoGenerateColumns="False" CanUserSortColumns="False">
+                                <DataGrid x:Name="dataGrid_coneExtrude" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" HorizontalAlignment="Left" Height="194" Margin="96,191,0,0" VerticalAlignment="Top" Width="609" ItemsSource="{Binding SelectedItem.Type_Struct3.FloatList, ElementName=empTree}" AutoGenerateColumns="False" CanUserSortColumns="False">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Binding="{Binding F_00, UpdateSourceTrigger=PropertyChanged}" Header="WorldScaleFactor" Width="*"/>
                                         <DataGridTextColumn Binding="{Binding F_04, UpdateSourceTrigger=PropertyChanged}" Header="WorldScaleAdd" Width="*"/>
@@ -442,9 +477,9 @@
                                 </DataGrid>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_Mesh" Header="Mesh">
-                            <Grid x:Name="grid_Mesh" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_Mesh" Header="Mesh" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_Mesh">
                                 <TextBox x:Name="mesh_F_00" Text="{Binding SelectedItem.Type_Model.F_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Angle Rotation" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
                                 <TextBox x:Name="mesh_F_04" Text="{Binding SelectedItem.Type_Model.F_04, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -474,9 +509,9 @@
                                 <Label Content="I__44" HorizontalAlignment="Left" Margin="12,163,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_ShapeDraw" Header="ShapeDraw">
-                            <Grid x:Name="grid_ShapeDraw" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_ShapeDraw" Header="ShapeDraw" Controls:ControlsHelper.HeaderFontSize="16">
+                            <Grid x:Name="grid_ShapeDraw">
                                 <TextBox x:Name="shapeDraw_F_00" Text="{Binding SelectedItem.Type_Struct5.F_00, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="Rotation" HorizontalAlignment="Left" Margin="12,42,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right" ToolTip="SphereRadius_ForRandomPositionOnSphere"/>
                                 <TextBox x:Name="shapeDraw_F_04" Text="{Binding SelectedItem.Type_Struct5.F_04, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="390,44,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
@@ -495,7 +530,7 @@
                                 <Label Content="I__28" HorizontalAlignment="Left" Margin="12,193,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
                                 <TextBox x:Name="shapeDraw_I_30" Text="{Binding SelectedItem.Type_Struct5.I_30, ElementName=empTree, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="171,227,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="82"/>
                                 <Label Content="I__30" HorizontalAlignment="Left" Margin="12,223,0,0" VerticalAlignment="Top" Width="154" HorizontalContentAlignment="Right"/>
-                                <DataGrid x:Name="dataGrid_ShapeDraw" HorizontalAlignment="Left" Height="328" Margin="521,42,0,0" VerticalAlignment="Top" Width="207" ItemsSource="{Binding SelectedItem.Type_Struct5.FloatList, ElementName=empTree}" AutoGenerateColumns="False" CanUserSortColumns="False">
+                                <DataGrid x:Name="dataGrid_ShapeDraw" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" HorizontalAlignment="Left" Height="328" Margin="521,42,0,0" VerticalAlignment="Top" Width="207" ItemsSource="{Binding SelectedItem.Type_Struct5.FloatList, ElementName=empTree}" AutoGenerateColumns="False" CanUserSortColumns="False">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Binding="{Binding F_00, UpdateSourceTrigger=PropertyChanged}" Header="X" Width="*"/>
                                         <DataGridTextColumn Binding="{Binding F_04, UpdateSourceTrigger=PropertyChanged}" Header="Y" Width="*"/>
@@ -503,8 +538,8 @@
                                 </DataGrid>
 
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_Animaions" Header="Animations">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_Animaions" Header="Animations" Controls:ControlsHelper.HeaderFontSize="16">
                             <Grid>
 
 
@@ -517,9 +552,9 @@
                                 </ComboBox>
                                 <Button Content="Add" HorizontalAlignment="Left" Margin="352,22,0,0" VerticalAlignment="Top" Width="75" Click="AddNewAnimationType0_Click"/>
                                 <Button Content="Remove" HorizontalAlignment="Left" Margin="442,22,0,0" VerticalAlignment="Top" Width="75" Click="RemoveAnimationType0_Click"/>
-                                <GroupBox Header="Animation Parameters" HorizontalAlignment="Left" Height="320" Margin="110,65,0,0" VerticalAlignment="Top" Width="496">
+                                <GroupBox Header="Animation Parameters" HorizontalAlignment="Left" Height="338" Margin="110,65,0,0" VerticalAlignment="Top" Width="496">
                                     <Grid Margin="-100,-20,0.0,0.0" IsEnabled="{Binding SelectedItem, ElementName=comboBox_Type0, Converter={StaticResource NullToFalse}}">
-                                        <ComboBox x:Name="comboBox_Type0_Parameter" SelectionChanged="ComboBox_Type0_Parameter_SelectionChanged" SelectedItem="{Binding SelectedItem.SelectedParameter, ElementName=comboBox_Type0}" ItemsSource="{Binding SelectedItem.Parameters, ElementName=comboBox_Type0}" HorizontalAlignment="Left" Margin="208,22,0,0" VerticalAlignment="Top" Width="120"/>
+                                        <ComboBox x:Name="comboBox_Type0_Parameter" SelectionChanged="ComboBox_Type0_Parameter_SelectionChanged" SelectedItem="{Binding SelectedItem.SelectedParameter, ElementName=comboBox_Type0}" ItemsSource="{Binding Source={StaticResource AnimTypeEnum}}"  HorizontalAlignment="Left" Margin="208,22,0,0" VerticalAlignment="Top" Width="120"/>
                                         <Label Content="Type" Margin="135,19,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
                                         <ComboBox x:Name="comboBox_Type0_Component_Position" SelectedItem="{Binding SelectedItem.SelectedComponentPosition, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentPositions, ElementName=comboBox_Type0}" Visibility="{Binding ElementName=comboBox_Type0, Path=SelectedItem.IsPositionVisible}" HorizontalAlignment="Left" Margin="208,52,0,0" VerticalAlignment="Top" Width="120"/>
                                         <ComboBox x:Name="comboBox_Type0_Component_Rotation" SelectedItem="{Binding SelectedItem.SelectedComponentRotation, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentRotations, ElementName=comboBox_Type0}" Visibility="{Binding ElementName=comboBox_Type0, Path=SelectedItem.IsRotationVisible}" HorizontalAlignment="Left" Margin="208,52,0,0" VerticalAlignment="Top" Width="120"/>
@@ -527,56 +562,88 @@
                                         <ComboBox x:Name="comboBox_Type0_Component_Color1" SelectedItem="{Binding SelectedItem.SelectedComponentColor1, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentColor1s, ElementName=comboBox_Type0}" Visibility="{Binding ElementName=comboBox_Type0, Path=SelectedItem.IsColor1Visible}" HorizontalAlignment="Left" Margin="208,52,0,0" VerticalAlignment="Top" Width="120"/>
                                         <ComboBox x:Name="comboBox_Type0_Component_Color2" SelectedItem="{Binding SelectedItem.SelectedComponentColor2, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentColor2s, ElementName=comboBox_Type0}" Visibility="{Binding ElementName=comboBox_Type0, Path=SelectedItem.IsColor2Visible}" HorizontalAlignment="Left" Margin="208,52,0,0" VerticalAlignment="Top" Width="120"/>
                                         <Label Content="Component" Margin="135,49,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
-                                        <CheckBox Content="Looped" IsChecked="{Binding SelectedItem.I_02, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="208,79,0,0" VerticalAlignment="Top" Width="120"/>
-                                        <CheckBox Content="Interpolated" IsChecked="{Binding SelectedItem.I_01_b, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="208,100,0,0" VerticalAlignment="Top" Width="120"/>
+                                        <CheckBox Content="Looped" IsChecked="{Binding SelectedItem.I_02, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="208,83,0,0" VerticalAlignment="Top" Width="120"/>
+                                        <CheckBox Content="Interpolated" IsChecked="{Binding SelectedItem.I_01_b, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="208,106,0,0" VerticalAlignment="Top" Width="120"/>
                                         <TextBox x:Name="animType0_I_03"  Text="{Binding SelectedItem.I_03, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="418,51,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
                                         <Label Content="I__03" Margin="345,49,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
                                         <TextBox x:Name="animType0_F_04"  Text="{Binding SelectedItem.F_04, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="418,79,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
                                         <Label Content="F__04" Margin="345,77,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
                                         <TextBox x:Name="animType0_I_00" Text="{Binding SelectedItem.I_08, ElementName=comboBox_Type0, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="418,24,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
                                         <Label Content="Duration" Margin="345,22,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
-                                        <DataGrid x:Name="dataGrid_type0_Keyframes" HorizontalAlignment="Left" Height="176" Margin="208,137,0,0" VerticalAlignment="Top" Width="307" ItemsSource="{Binding SelectedItem.Keyframes, ElementName=comboBox_Type0}" AutoGenerateColumns="False" CanUserSortColumns="False" CanUserDeleteRows="True">
+                                        <DataGrid x:Name="dataGrid_type0_Keyframes" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" HorizontalAlignment="Left" Height="176" Margin="208,137,0,0" VerticalAlignment="Top" Width="307" ItemsSource="{Binding SelectedItem.Keyframes, ElementName=comboBox_Type0}" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserDeleteRows="False" CanUserAddRows="False">
+                                            <DataGrid.InputBindings>
+                                                <KeyBinding Key="Delete" Command="{Binding RemoveType0KeyframeCommand}"/>
+                                                <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddType0KeyframeCommand}"/>
+                                            </DataGrid.InputBindings>
+
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Binding="{Binding Index, UpdateSourceTrigger=PropertyChanged}" Header="Time Index" Width="*"/>
                                                 <DataGridTextColumn Binding="{Binding Float, UpdateSourceTrigger=PropertyChanged}" Header="Value" Width="*"/>
                                             </DataGrid.Columns>
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu Controls:ControlsHelper.HeaderFontSize="12">
+                                                    <MenuItem Header="Delete" Command="{Binding RemoveType0KeyframeCommand}"/>
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
                                         </DataGrid>
 
+                                        <Button HorizontalAlignment="Left" Margin="177,166,0,0" VerticalAlignment="Top" Width="26" Height="25" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding AddType0KeyframeCommand}" ToolTip="Add a keyframe">
+                                            <iconPacks:PackIconMaterialLight Kind="Plus" />
+                                        </Button>
+                                        <Button HorizontalAlignment="Left" Margin="177,196,0,0" VerticalAlignment="Top" Width="26" Height="25" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding RemoveType0KeyframeCommand}" ToolTip="Remove the selected keyframe">
+                                            <iconPacks:PackIconMaterialLight Kind="Delete" />
+                                        </Button>
                                     </Grid>
 
                                 </GroupBox>
                             </Grid>
-                        </TabItem>
-                        <TabItem x:Name="Tab_AnimationsGroup" Header="Animations (group)">
+                        </Controls:MetroTabItem>
+                        <Controls:MetroTabItem x:Name="Tab_AnimationsGroup" Header="Animations (group)" Controls:ControlsHelper.HeaderFontSize="16">
                             <Grid>
                                 <Grid Margin="0,67,0.055,0.345" IsEnabled="{Binding SelectedItem, ElementName=comboBox_Type1_Header, Converter={StaticResource NullToFalse}}">
 
 
-                                    <GroupBox Header="Animation Parameters" HorizontalAlignment="Left" Height="271" Margin="106,57,0,0" VerticalAlignment="Top" Width="520">
+                                    <GroupBox Header="Animation Parameters" HorizontalAlignment="Left" Height="279" Margin="106,57,0,0" VerticalAlignment="Top" Width="520">
                                         <Grid Margin="-80,0,0.0,0.0" IsEnabled="{Binding SelectedItem, ElementName=comboBox_Type1, Converter={StaticResource NullToFalse}}">
-                                            <ComboBox x:Name="comboBox_Type1_Parameter" SelectedItem="{Binding SelectedItem.SelectedParameter, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.Parameters, ElementName=comboBox_Type0}" HorizontalAlignment="Left" Margin="214,21,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <Label Content="Type" Margin="141,18,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
-                                            <ComboBox x:Name="comboBox_Type1_Component_Position" SelectedItem="{Binding SelectedItem.SelectedComponentPosition, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentPositions, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsPositionVisible}" HorizontalAlignment="Left" Margin="214,51,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <ComboBox x:Name="comboBox_Type1_Component_Rotation" SelectedItem="{Binding SelectedItem.SelectedComponentRotation, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentRotations, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsRotationVisible}" HorizontalAlignment="Left" Margin="214,51,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <ComboBox x:Name="comboBox_Type1_Component_Scale" SelectedItem="{Binding SelectedItem.SelectedComponentScale, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentScales, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsScaleVisible}" HorizontalAlignment="Left" Margin="214,51,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <ComboBox x:Name="comboBox_Type1_Component_Color1" SelectedItem="{Binding SelectedItem.SelectedComponentColor1, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentColor1s, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsColor1Visible}" HorizontalAlignment="Left" Margin="214,51,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <ComboBox x:Name="comboBox_Type1_Component_Color2" SelectedItem="{Binding SelectedItem.SelectedComponentColor2, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentColor2s, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsColor2Visible}" HorizontalAlignment="Left" Margin="214,51,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <Label Content="Component" Margin="141,48,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
-                                            <CheckBox Content="Looped" IsChecked="{Binding SelectedItem.I_02, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="214,78,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <CheckBox Content="Interpolated" IsChecked="{Binding SelectedItem.I_01_b, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="214,99,0,0" VerticalAlignment="Top" Width="120"/>
-                                            <TextBox x:Name="animType1_I_03"  Text="{Binding SelectedItem.I_03, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="424,50,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
-                                            <Label Content="I__03" Margin="351,48,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
-                                            <TextBox x:Name="animType1_F_04"  Text="{Binding SelectedItem.F_04, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="424,78,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
-                                            <Label Content="F__04" Margin="351,76,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
-                                            <TextBox x:Name="animType1_I_08"  Text="{Binding SelectedItem.I_08, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="424,23,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
-                                            <Label Content="Duration" Margin="351,21,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
-                                            <DataGrid x:Name="dataGrid_type1_Keyframes" HorizontalAlignment="Left" Height="103" Margin="214,136,0,0" VerticalAlignment="Top" Width="307" ItemsSource="{Binding SelectedItem.Keyframes, ElementName=comboBox_Type1}" AutoGenerateColumns="False" CanUserSortColumns="False" CanUserDeleteRows="True">
+                                            <ComboBox x:Name="comboBox_Type1_Parameter" SelectedItem="{Binding SelectedItem.SelectedParameter, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding Source={StaticResource AnimTypeEnum}}" HorizontalAlignment="Left" Margin="221,0,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <Label Content="Type" Margin="148,-3,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
+                                            <ComboBox x:Name="comboBox_Type1_Component_Position" SelectedItem="{Binding SelectedItem.SelectedComponentPosition, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentPositions, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsPositionVisible}" HorizontalAlignment="Left" Margin="221,30,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <ComboBox x:Name="comboBox_Type1_Component_Rotation" SelectedItem="{Binding SelectedItem.SelectedComponentRotation, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentRotations, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsRotationVisible}" HorizontalAlignment="Left" Margin="221,30,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <ComboBox x:Name="comboBox_Type1_Component_Scale" SelectedItem="{Binding SelectedItem.SelectedComponentScale, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentScales, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsScaleVisible}" HorizontalAlignment="Left" Margin="221,30,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <ComboBox x:Name="comboBox_Type1_Component_Color1" SelectedItem="{Binding SelectedItem.SelectedComponentColor1, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentColor1s, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsColor1Visible}" HorizontalAlignment="Left" Margin="221,30,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <ComboBox x:Name="comboBox_Type1_Component_Color2" SelectedItem="{Binding SelectedItem.SelectedComponentColor2, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.ComponentColor2s, ElementName=comboBox_Type1}" Visibility="{Binding ElementName=comboBox_Type1, Path=SelectedItem.IsColor2Visible}" HorizontalAlignment="Left" Margin="221,30,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <Label Content="Component" Margin="148,27,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
+                                            <CheckBox Content="Looped" IsChecked="{Binding SelectedItem.I_02, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="221,61,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <CheckBox Content="Interpolated" IsChecked="{Binding SelectedItem.I_01_b, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Margin="221,84,0,0" VerticalAlignment="Top" Width="120"/>
+                                            <TextBox x:Name="animType1_I_03"  Text="{Binding SelectedItem.I_03, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="431,29,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
+                                            <Label Content="I__03" Margin="358,27,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
+                                            <TextBox x:Name="animType1_F_04"  Text="{Binding SelectedItem.F_04, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="431,57,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
+                                            <Label Content="F__04" Margin="358,55,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
+                                            <TextBox x:Name="animType1_I_08"  Text="{Binding SelectedItem.I_08, ElementName=comboBox_Type1, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="431,2,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="97"/>
+                                            <Label Content="Duration" Margin="358,0,0,0" VerticalAlignment="Top" Width="73" HorizontalAlignment="Left" HorizontalContentAlignment="Right"/>
+                                            <DataGrid x:Name="dataGrid_type1_Keyframes" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" HorizontalAlignment="Left" Height="118" Margin="221,115,0,0" VerticalAlignment="Top" Width="307" ItemsSource="{Binding SelectedItem.Keyframes, ElementName=comboBox_Type1}" AutoGenerateColumns="False" CanUserSortColumns="True" CanUserDeleteRows="False" CanUserAddRows="False">
+                                                <DataGrid.InputBindings>
+                                                    <KeyBinding Key="Delete" Command="{Binding RemoveType1KeyframeCommand}"/>
+                                                    <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding AddType1KeyframeCommand}"/>
+                                                </DataGrid.InputBindings>
+                                                <DataGrid.ContextMenu>
+                                                    <ContextMenu Controls:ControlsHelper.HeaderFontSize="12">
+                                                        <MenuItem Header="Delete" Command="{Binding RemoveType1KeyframeCommand}"/>
+                                                    </ContextMenu>
+                                                </DataGrid.ContextMenu>
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Binding="{Binding Index, UpdateSourceTrigger=PropertyChanged}" Header="Time Index" Width="*"/>
                                                     <DataGridTextColumn Binding="{Binding Float, UpdateSourceTrigger=PropertyChanged}" Header="Value" Width="*"/>
                                                 </DataGrid.Columns>
                                             </DataGrid>
 
+
+                                            <Button HorizontalAlignment="Left" Margin="179,140,0,0" VerticalAlignment="Top" Width="26" Height="25" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding AddType1KeyframeCommand}" ToolTip="Add a keyframe">
+                                                <iconPacks:PackIconMaterialLight Kind="Plus" />
+                                            </Button>
+                                            <Button HorizontalAlignment="Left" Margin="179,170,0,0" VerticalAlignment="Top" Width="26" Height="25" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding RemoveType1KeyframeCommand}" ToolTip="Remove the selected keyframe">
+                                                <iconPacks:PackIconMaterialLight Kind="Delete" />
+                                            </Button>
                                         </Grid>
 
                                     </GroupBox>
@@ -609,61 +676,38 @@
 
                                 </Grid>
                             </Grid>
-                        </TabItem>
-                    </TabControl>
-                    <Button HorizontalAlignment="Left" Margin="10,19,0,0" VerticalAlignment="Top" Width="26" Height="25" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="AddParticleEffect_Click" ToolTip="Add a new Particle Effect">
-                        <Button.Background>
-                            <ImageBrush ImageSource="{StaticResource plus}" Stretch="Uniform">
-                                <ImageBrush.RelativeTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform CenterY="0.5" CenterX="0.5" ScaleX="0.8" ScaleY="0.8"/>
-                                        <SkewTransform CenterY="0.5" CenterX="0.5"/>
-                                        <RotateTransform CenterY="0.5" CenterX="0.5"/>
-                                        <TranslateTransform Y="-0.0"/>
-                                    </TransformGroup>
-                                </ImageBrush.RelativeTransform>
-                            </ImageBrush>
-                        </Button.Background>
+                        </Controls:MetroTabItem>
+                    </Controls:MetroTabControl>
+                    <Button HorizontalAlignment="Left" Margin="10,19,0,0" VerticalAlignment="Top" Width="26" Height="25" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding AddParticleEffect_Command}" ToolTip="Add a new Particle Effect">
+                        <iconPacks:PackIconMaterialLight Kind="Plus" />
                     </Button>
-                    <Button HorizontalAlignment="Left" Margin="10,80,0,0" VerticalAlignment="Top" Width="26" Height="25" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="RemoveParticleEffect_Click" ToolTip="Remove the selected Particle Effect">
-                        <Button.Background>
-                            <ImageBrush ImageSource="{StaticResource delete}" Stretch="Uniform">
-                                <ImageBrush.RelativeTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform CenterY="0.5" CenterX="0.5" ScaleX="1" ScaleY="1"/>
-                                        <SkewTransform CenterY="0.5" CenterX="0.5"/>
-                                        <RotateTransform CenterY="0.5" CenterX="0.5"/>
-                                        <TranslateTransform Y="-0.0"/>
-                                    </TransformGroup>
-                                </ImageBrush.RelativeTransform>
-                            </ImageBrush>
-                        </Button.Background>
+
+                    <Button HorizontalAlignment="Left" Margin="10,80,0,0" VerticalAlignment="Top" Width="26" Height="25" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding RemoveParticleEffect_Command}" ToolTip="Remove the selected Particle Effect">
+                        <iconPacks:PackIconMaterialLight Kind="Delete" />
                     </Button>
-                    <Button HorizontalAlignment="Left" Margin="10,49,0,0" VerticalAlignment="Top" Width="26" Height="26" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="AddParticleEffectAsChild_Click" ToolTip="Add a new Particle Effect as a child to the selected Particle Effect">
-                        <Button.Background>
-                            <ImageBrush ImageSource="{StaticResource plus}" Stretch="Uniform">
-                                <ImageBrush.RelativeTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform CenterY="0.5" CenterX="0.5" ScaleX="0.8" ScaleY="0.8"/>
-                                        <SkewTransform CenterY="0.5" CenterX="0.5"/>
-                                        <RotateTransform CenterY="0.5" CenterX="0.5"/>
-                                        <TranslateTransform Y="-0.0"/>
-                                    </TransformGroup>
-                                </ImageBrush.RelativeTransform>
-                            </ImageBrush>
-                        </Button.Background>
+                    <Button HorizontalAlignment="Left" Margin="10,49,0,0" VerticalAlignment="Top" Width="26" Height="26" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding AddParticleEffectAsChild_Command}" ToolTip="Add a new Particle Effect as a child to the selected Particle Effect">
+                        <iconPacks:PackIconMaterialLight Kind="Plus" />
                     </Button>
 
 
                 </Grid>
-            </TabItem>
-            <TabItem Header="Textures">
-                <Grid Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
-                    <ListBox PreviewKeyDown="ListBox_Textures_PreviewKeyDown" x:Name="listBox_Textures" ItemsSource="{Binding empFile.Textures}" HorizontalAlignment="Left" Height="424" Margin="48,10,0,0" VerticalAlignment="Top" Width="252" SelectionMode="Extended">
+            </Controls:MetroTabItem>
+            <Controls:MetroTabItem Header="Textures" Controls:ControlsHelper.HeaderFontSize="16">
+                <Grid>
+                    <ListBox Tag="{Binding DataContext, ElementName=empEditorWindow}" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" x:Name="listBox_Textures" ItemsSource="{Binding empFile.Textures}" HorizontalAlignment="Left" Height="482" Margin="48,10,0,0" VerticalAlignment="Top" Width="252" SelectionMode="Extended">
                         <ListBox.Resources>
                             <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="Black"/>
 
                         </ListBox.Resources>
+                        <ListBox.InputBindings>
+                            <KeyBinding Key="Delete" Command="{Binding TextureContextMenu_Delete_Command}"/>
+                            <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding TextureAdd_Command}"/>
+                            <KeyBinding Key="C" Modifiers="Ctrl" Command="{Binding TextureContextMenu_Copy_Command}"/>
+                            <KeyBinding Key="V" Modifiers="Ctrl" Command="{Binding TextureContextMenu_Paste_Command}"/>
+                            <KeyBinding Key="V" Modifiers="Shift" Command="{Binding TextureContextMenu_PasteValues_Command}"/>
+                            <KeyBinding Key="M" Modifiers="Ctrl" Command="{Binding TextureContextMenu_Merge_Command}"/>
+                            <KeyBinding Key="D" Modifiers="Ctrl" Command="{Binding TextureContextMenu_Duplicate_Command}"/>
+                        </ListBox.InputBindings>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="0,2">
@@ -677,41 +721,41 @@
 
 
                         <ListBox.ContextMenu>
-                            <ContextMenu>
-                                <MenuItem Header="Copy" Click="TextureContextMenu_Copy_Click"/>
-                                <MenuItem Header="Paste" Click="TextureContextMenu_Paste_Click"/>
-                                <MenuItem Header="Paste Values (overwrite)" Click="TextureContextMenu_PasteValues_Click"/>
-                                <MenuItem Header="Duplicate" Click="TextureContextMenu_Duplicate_Click"/>
-                                <MenuItem Header="Delete" Click="TextureContextMenu_Delete_Click"/>
-                                <MenuItem Header="Merge" Click="TextureContextMenu_Merge_Click"/>
+                            <ContextMenu FontSize="12">
+                                <MenuItem Header="Copy" Command="{Binding PlacementTarget.Tag.TextureContextMenu_Copy_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <MenuItem Header="Paste" Command="{Binding PlacementTarget.Tag.TextureContextMenu_Paste_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <MenuItem Header="Paste Values (overwrite)" Command="{Binding PlacementTarget.Tag.TextureContextMenu_PasteValues_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <MenuItem Header="Duplicate" Command="{Binding PlacementTarget.Tag.TextureContextMenu_Duplicate_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <MenuItem Header="Delete" Command="{Binding PlacementTarget.Tag.TextureContextMenu_Delete_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                <MenuItem Header="Merge" Command="{Binding PlacementTarget.Tag.TextureContextMenu_Merge_Command, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
                             </ContextMenu>
                         </ListBox.ContextMenu>
 
                     </ListBox>
-                    <GroupBox Header="Properties" HorizontalAlignment="Left" Height="424" Margin="305,10,0,0" VerticalAlignment="Top" Width="362">
+                    <GroupBox Header="Properties" HorizontalAlignment="Left" Height="482" Margin="305,10,0,0" VerticalAlignment="Top" Width="362">
                         <Grid>
-                            <TextBox IsEnabled="False" Text="{Binding SelectedItem.TextureRef.Name, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="90,10,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="229"/>
-                            <Label Content="Texture" HorizontalAlignment="Left" Margin="6,8,0,0" VerticalAlignment="Top" Width="79" HorizontalContentAlignment="Right"/>
-                            <TextBox x:Name="texture_I_04" Text="{Binding SelectedItem.I_04, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="156,72,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="61"/>
-                            <Label Content="Filtering Min" HorizontalAlignment="Left" Margin="6,67,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
-                            <TextBox x:Name="texture_I_05" Text="{Binding SelectedItem.I_05, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="258,72,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="61"/>
-                            <Label Content="Max" HorizontalAlignment="Left" Margin="217,67,0,0" VerticalAlignment="Top" Width="36" HorizontalContentAlignment="Right"/>
-                            <Label Content="Repetition X" HorizontalAlignment="Left" Margin="6,100,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
-                            <ComboBox HorizontalAlignment="Left" Margin="156,100,0,0" VerticalAlignment="Top" Width="61" SelectedItem="{Binding SelectedItem.I_06_byte, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.TextureRepititions, ElementName=listBox_Textures}"/>
-                            <Label Content="Y" HorizontalAlignment="Left" Margin="217,100,0,0" VerticalAlignment="Top" Width="36" HorizontalContentAlignment="Right"/>
-                            <ComboBox HorizontalAlignment="Left" Margin="258,100,0,0" VerticalAlignment="Top" Width="61" SelectedItem="{Binding SelectedItem.I_07_byte, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.TextureRepititions, ElementName=listBox_Textures}"/>
+                            <TextBox IsEnabled="False" Text="{Binding SelectedItem.TextureRef.Name, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="90,2,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="229"/>
+                            <Label Content="Texture" HorizontalAlignment="Left" Margin="6,0,0,0" VerticalAlignment="Top" Width="79" HorizontalContentAlignment="Right"/>
+                            <TextBox x:Name="texture_I_04" Text="{Binding SelectedItem.I_04, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="129,82,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="73"/>
+                            <Label Content="Filtering Min" HorizontalAlignment="Left" Margin="-21,77,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
+                            <TextBox x:Name="texture_I_05" Text="{Binding SelectedItem.I_05, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="248,82,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="71"/>
+                            <Label Content="Max" HorizontalAlignment="Left" Margin="207,77,0,0" VerticalAlignment="Top" Width="36" HorizontalContentAlignment="Right"/>
+                            <Label Content="Repetition X" HorizontalAlignment="Left" Margin="-21,110,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
+                            <ComboBox HorizontalAlignment="Left" Margin="129,110,0,0" VerticalAlignment="Top" Width="73" SelectedItem="{Binding SelectedItem.I_06_byte, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.TextureRepititions, ElementName=listBox_Textures}"/>
+                            <Label Content="Y" HorizontalAlignment="Left" Margin="207,110,0,0" VerticalAlignment="Top" Width="36" HorizontalContentAlignment="Right"/>
+                            <ComboBox HorizontalAlignment="Left" Margin="248,110,0,0" VerticalAlignment="Top" Width="71" SelectedItem="{Binding SelectedItem.I_07_byte, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" ItemsSource="{Binding SelectedItem.TextureRepititions, ElementName=listBox_Textures}"/>
 
-                            <TextBox x:Name="texture_I_08" Text="{Binding SelectedItem.I_08, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="156,132,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="61"/>
-                            <Label Content="Random Symetry X" HorizontalAlignment="Left" Margin="6,130,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
-                            <TextBox x:Name="texture_I_09" Text="{Binding SelectedItem.I_09, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="258,132,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="61"/>
-                            <Label Content="Y" HorizontalAlignment="Left" Margin="217,130,0,0" VerticalAlignment="Top" Width="36" HorizontalContentAlignment="Right"/>
-                            <TextBox x:Name="texture_I_02" Text="{Binding SelectedItem.I_02, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="156,163,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="61"/>
-                            <Label Content="I__02" HorizontalAlignment="Left" Margin="6,160,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
-                            <ComboBox x:Name="comboBox_TextureType" SelectionChanged="ComboBox_TextureType_SelectionChanged" HorizontalAlignment="Left" Margin="127,206,0,0" VerticalAlignment="Top" Width="163" SelectedItem="{Binding SelectedItem.TextureType, ElementName=listBox_Textures}" ItemsSource="{Binding SelectedItem.TextureAnimationTypes, ElementName=listBox_Textures}"/>
+                            <TextBox x:Name="texture_I_08" Text="{Binding SelectedItem.I_08, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="129,142,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="73"/>
+                            <Label Content="Random Symetry X" HorizontalAlignment="Left" Margin="-21,140,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
+                            <TextBox x:Name="texture_I_09" Text="{Binding SelectedItem.I_09, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="248,142,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="71"/>
+                            <Label Content="Y" HorizontalAlignment="Left" Margin="207,140,0,0" VerticalAlignment="Top" Width="36" HorizontalContentAlignment="Right"/>
+                            <TextBox x:Name="texture_I_02" Text="{Binding SelectedItem.I_02, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" Margin="129,173,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="73"/>
+                            <Label Content="I__02" HorizontalAlignment="Left" Margin="-21,170,0,0" VerticalAlignment="Top" Width="145" HorizontalContentAlignment="Right"/>
+                            <ComboBox x:Name="comboBox_TextureType" SelectionChanged="ComboBox_TextureType_SelectionChanged" HorizontalAlignment="Left" Margin="125,218,0,0" VerticalAlignment="Top" Width="163" SelectedItem="{Binding SelectedItem.TextureType, ElementName=listBox_Textures}" ItemsSource="{Binding SelectedItem.TextureAnimationTypes, ElementName=listBox_Textures}"/>
 
-                            <Label Content="Type" HorizontalAlignment="Left" Margin="53,203,0,0" VerticalAlignment="Top" Width="69" HorizontalContentAlignment="Right"/>
+                            <Label Content="Type" HorizontalAlignment="Left" Margin="51,215,0,0" VerticalAlignment="Top" Width="69" HorizontalContentAlignment="Right"/>
 
-                            <GroupBox Header="Sprite Coordinates" Width="345" Margin="5,230,-0.036,0.582">
+                            <GroupBox Header="Sprite Coordinates" Width="345" Margin="4,254,2.333,7">
                                 <Grid>
                                     <Grid x:Name="grid_TextureType0" HorizontalAlignment="Left" Height="146" VerticalAlignment="Top" Width="345" Visibility="{Binding ElementName=listBox_Textures, Path=SelectedItem.IsType0Visible}">
                                         <TextBox x:Name="textureType0_ScrollX" Text="{Binding SelectedItem.SubData2.Keyframes[0].F_04, ElementName=listBox_Textures, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Height="23" TextWrapping="NoWrap" VerticalAlignment="Top" Width="61" Margin="151,10,0,0"/>
@@ -732,13 +776,13 @@
 
                                     </Grid>
                                     <Grid x:Name="grid_TextureType2" HorizontalAlignment="Left" Height="146" Width="345" VerticalAlignment="Top" Visibility="{Binding ElementName=listBox_Textures, Path=SelectedItem.IsType2Visible}">
-                                        <DataGrid x:Name="dataGrid_ScrollKeyframes" HorizontalAlignment="Left" Height="126" Margin="26,10,0,0" VerticalAlignment="Top" Width="300" ItemsSource="{Binding SelectedItem.SubData2.Keyframes, ElementName=listBox_Textures}" AutoGenerateColumns="False" CanUserSortColumns="False" CanUserAddRows="False" CanUserDeleteRows="False">
+                                        <DataGrid x:Name="dataGrid_ScrollKeyframes" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1" FontSize="10" HorizontalAlignment="Left" Height="126" Margin="26,10,0,0" VerticalAlignment="Top" Width="300" ItemsSource="{Binding SelectedItem.SubData2.Keyframes, ElementName=listBox_Textures}" AutoGenerateColumns="False" CanUserSortColumns="False" CanUserAddRows="False" CanUserDeleteRows="False">
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Binding="{Binding I_00, UpdateSourceTrigger=PropertyChanged}" Header="Time" Width="*"/>
-                                                <DataGridTextColumn Binding="{Binding F_04, UpdateSourceTrigger=PropertyChanged}" Header="Scroll X" Width="*"/>
-                                                <DataGridTextColumn Binding="{Binding F_08, UpdateSourceTrigger=PropertyChanged}" Header="Scroll Y" Width="*"/>
-                                                <DataGridTextColumn Binding="{Binding F_12, UpdateSourceTrigger=PropertyChanged}" Header="Scale X" Width="*"/>
-                                                <DataGridTextColumn Binding="{Binding F_16, UpdateSourceTrigger=PropertyChanged}" Header="Scale Y" Width="*"/>
+                                                <DataGridTextColumn Binding="{Binding I_00, UpdateSourceTrigger=PropertyChanged}" Header="Time" Width="*" />
+                                                <DataGridTextColumn Binding="{Binding F_04, UpdateSourceTrigger=PropertyChanged}" Header="Scroll X" Width="*" />
+                                                <DataGridTextColumn Binding="{Binding F_08, UpdateSourceTrigger=PropertyChanged}" Header="Scroll Y" Width="*" />
+                                                <DataGridTextColumn Binding="{Binding F_12, UpdateSourceTrigger=PropertyChanged}" Header="Scale X" Width="*" />
+                                                <DataGridTextColumn Binding="{Binding F_16, UpdateSourceTrigger=PropertyChanged}" Header="Scale Y" Width="*" />
                                             </DataGrid.Columns>
                                         </DataGrid>
                                         <Button x:Name="button_TextureType2_AddKeyFrame" HorizontalAlignment="Left" Margin="0,36,0,0" VerticalAlignment="Top" Width="22" Height="21" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="button_TextureType2_AddKeyFrame_Click">
@@ -774,54 +818,29 @@
                                 </Grid>
                             </GroupBox>
 
-                            <Button Content="Change" HorizontalAlignment="Left" Margin="61,38,0,0" VerticalAlignment="Top" Width="75" Click="TextureTab_ChangeTexture_Click"/>
-                            <Separator HorizontalAlignment="Left" Height="15" Margin="10,57,0,0" VerticalAlignment="Top" Width="330"/>
-                            <Button Content="Go To" HorizontalAlignment="Left" Margin="232,38,0,0" VerticalAlignment="Top" Width="75" Click="TextureTab_GoToTexture_Click"/>
-                            <Separator HorizontalAlignment="Left" Height="15" Margin="10,186,0,0" VerticalAlignment="Top" Width="330"/>
-                            <Button Content="Remove" HorizontalAlignment="Left" Margin="147,38,0,0" VerticalAlignment="Top" Width="75" Click="TextureTab_RemoveTexture_Click"/>
+                            <Button Content="Change" HorizontalAlignment="Left" Margin="61,33,0,0" VerticalAlignment="Top" Width="75" Command="{Binding TextureTab_ChangeTexture_Command}"/>
+                            <Separator HorizontalAlignment="Left" Height="15" Margin="11,62,0,0" VerticalAlignment="Top" Width="330"/>
+                            <Button Content="Go To" HorizontalAlignment="Left" Margin="232,33,0,0" VerticalAlignment="Top" Width="75" Command="{Binding TextureTab_GoToTexture_Command}"/>
+                            <Separator HorizontalAlignment="Left" Height="15" Margin="8,202,0,0" VerticalAlignment="Top" Width="330"/>
+                            <Button Content="Remove" HorizontalAlignment="Left" Margin="147,33,0,0" VerticalAlignment="Top" Width="75" Command="{Binding TextureTab_RemoveTexture_Command}"/>
 
                         </Grid>
                     </GroupBox>
 
-                    <Grid Margin="672,25,10.164,19.818">
-                        <Grid.Background>
-                            <ImageBrush ImageSource="{StaticResource gridlines}" Stretch="UniformToFill"/>
-                        </Grid.Background>
-                        <utils:ZoomBorder x:Name="border" ClipToBounds="True" Background="Transparent">
+                    <Grid Margin="672,25,10.164,19.818" Background="#252525">
+                        <utils:ZoomBorder x:Name="border" ClipToBounds="True" Background="Transparent" BorderBrush="{DynamicResource AccentColorBrush2}" BorderThickness="1">
                             <Image Stretch="Uniform" Source="{Binding SelectedItem.TextureRef.DdsImage, ElementName=listBox_Textures}" ToolTip="{Binding SelectedItem.TextureRef.Name, ElementName=listBox_Textures}" Margin="0,0,-0.382,0.327"/>
                         </utils:ZoomBorder>
                     </Grid>
 
-                    <Button HorizontalAlignment="Left" Margin="17,14,0,0" VerticalAlignment="Top" Width="26" Height="24" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="Button_TextureAdd_Click">
-                        <Button.Background>
-                            <ImageBrush ImageSource="{StaticResource plus}" Stretch="Uniform">
-                                <ImageBrush.RelativeTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform CenterY="0.5" CenterX="0.5" ScaleX="0.8" ScaleY="0.8"/>
-                                        <SkewTransform CenterY="0.5" CenterX="0.5"/>
-                                        <RotateTransform CenterY="0.5" CenterX="0.5"/>
-                                        <TranslateTransform Y="-0.0"/>
-                                    </TransformGroup>
-                                </ImageBrush.RelativeTransform>
-                            </ImageBrush>
-                        </Button.Background>
+                    <Button HorizontalAlignment="Left" Margin="17,14,0,0" VerticalAlignment="Top" Width="26" Height="24" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding TextureAdd_Command}">
+                        <iconPacks:PackIconMaterialLight Kind="Plus" />
                     </Button>
-                    <Button HorizontalAlignment="Left" Margin="17,43,0,0" VerticalAlignment="Top" Width="26" Height="24" Foreground="Black" Style="{StaticResource ButtonNoGlow}" Click="Button_TextureRemove_Click">
-                        <Button.Background>
-                            <ImageBrush ImageSource="{StaticResource delete}" Stretch="Uniform">
-                                <ImageBrush.RelativeTransform>
-                                    <TransformGroup>
-                                        <ScaleTransform CenterY="0.5" CenterX="0.5" ScaleX="1" ScaleY="1"/>
-                                        <SkewTransform CenterY="0.5" CenterX="0.5"/>
-                                        <RotateTransform CenterY="0.5" CenterX="0.5"/>
-                                        <TranslateTransform Y="-0.0"/>
-                                    </TransformGroup>
-                                </ImageBrush.RelativeTransform>
-                            </ImageBrush>
-                        </Button.Background>
+                    <Button HorizontalAlignment="Left" Margin="17,43,0,0" VerticalAlignment="Top" Width="26" Height="24" Style="{DynamicResource MahApps.Metro.Styles.MetroCircleButtonStyle}" Command="{Binding TextureRemove_Command}">
+                        <iconPacks:PackIconMaterialLight Kind="Delete" />
                     </Button>
                 </Grid>
-            </TabItem>
-        </TabControl>
+            </Controls:MetroTabItem>
+        </Controls:MetroTabControl>
     </Grid>
-</Window>
+</Controls:MetroWindow>

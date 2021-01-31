@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MahApps.Metro.Controls;
+using System;
 using System.ComponentModel;
 using System.Windows;
 using Xv2CoreLib.EMM;
@@ -8,7 +9,7 @@ namespace EEPK_Organiser.Forms
     /// <summary>
     /// Interaction logic for TextureSelector.xaml
     /// </summary>
-    public partial class MaterialSelector : Window, INotifyPropertyChanged
+    public partial class MaterialSelector : MetroWindow, INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
 

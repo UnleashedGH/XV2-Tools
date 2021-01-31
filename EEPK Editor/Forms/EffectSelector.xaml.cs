@@ -1,4 +1,6 @@
-﻿using System;
+﻿using EEPK_Organiser.View;
+using MahApps.Metro.Controls;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -21,7 +23,7 @@ namespace EEPK_Organiser.Forms
     /// <summary>
     /// Interaction logic for EffectSelector.xaml
     /// </summary>
-    public partial class EffectSelector : Window, INotifyPropertyChanged
+    public partial class EffectSelector : MetroWindow, INotifyPropertyChanged
     {
         public enum Mode
         {

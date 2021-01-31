@@ -61,7 +61,25 @@ namespace Xv2CoreLib.IDB
 
         public void SortEntries()
         {
-            Entries = Sorting.SortEntries(Entries);
+            //Split entries by I_08 (Type), Sort them and then rejoin
+            int split = Entries.Max(x => x.I_08) + 1;
+            List<List<IDB_Entry>> splitEntries = new List<List<IDB_Entry>>();
+
+            for(int i = 0; i < split; i++)
+            {
+                splitEntries.Add(Entries.FindAll(x => x.I_08 == (ushort)i));
+                
+                if(splitEntries[i] != null)
+                    splitEntries[i].Sort((x, y) => x.SortID - y.SortID);
+            }
+
+            Entries.Clear();
+
+            for (int i = 0; i < split; i++)
+            {
+                if(splitEntries[i] != null)
+                    Entries.AddRange(splitEntries[i]);
+            }
         }
 
         public bool DoesSkillExist(string id, IDB_Type skillType)
@@ -142,6 +160,7 @@ namespace Xv2CoreLib.IDB
                     throw new Exception(String.Format("IDB \"{0}\" has no info msg file.", idbName));
             }
         }
+        
         public static string LimitBurstMsgFile(string idbName)
         {
             switch (idbName)
@@ -176,9 +195,9 @@ namespace Xv2CoreLib.IDB
 
         #region WrapperProperties
         [YAXDontSerialize]
-        public int SortID { get { return int.Parse(Index); } }
+        public int SortID { get { return int.Parse(I_00); } }
         [YAXDontSerialize]
-        public ushort ID { get { return ushort.Parse(Index); } set { Index = value.ToString(); } }
+        public ushort ID { get { return ushort.Parse(I_00); } set { I_00 = value.ToString(); } }
         [YAXDontSerialize]
         public ushort NameMsgID { get { return I_04; } set { I_04 = value; } }
         [YAXDontSerialize]
@@ -191,11 +210,13 @@ namespace Xv2CoreLib.IDB
         #endregion
 
 
-        //Index is not really an "Index" it is the ID, but the interface needs a "Index" to work
+        [YAXDontSerialize]
+        public string Index { get { return $"{I_00}_{I_08}"; } set { I_00 = value.Split('_')[0]; I_08 = ushort.Parse(value.Split('_')[1]); } }
+
         [YAXAttributeForClass]
         [YAXSerializeAs("ID")]
         [BindingAutoId]
-        public string Index { get; set; } //ushort
+        public string I_00 { get; set; } //ushort
         [YAXAttributeFor("Stars")]
         [YAXSerializeAs("value")]
         public ushort I_02 { get; set; }

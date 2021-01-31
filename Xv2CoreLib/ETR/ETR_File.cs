@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using YAXLib;
 using Xv2CoreLib.HslColor;
+using Xv2CoreLib.Resource.UndoRedo;
 
 namespace Xv2CoreLib.ETR
 {
@@ -33,34 +34,12 @@ namespace Xv2CoreLib.ETR
             
             int section1Count = BitConverter.ToInt16(bytes, 12);
             int section2Count = BitConverter.ToInt16(bytes, 14);
-
-            //number of Extrude Points (LineShape)
-            int section3Count = 0;
-
             int section1Offset = BitConverter.ToInt32(bytes, 16);
             int section2Offset = BitConverter.ToInt32(bytes, 20);
 
-            
-            int section3Offset = 0;
-
-            for (int i = 0; i < section1Count; i++)
+            for(int i = 0; i < section1Count; i++)
             {
                 ETR_MainEntry newEntry = new ETR_MainEntry();
-
-
-                //+16 is to skip the 4 floats for EndPoint that come BEFORE Extrude Points
-                //XenoXMLConverter output has it come after 
-                section3Offset = BitConverter.ToInt32(bytes, section1Offset + 116) + section1Offset + 16;
-
-
-             
-                section3Count = BitConverter.ToInt32(bytes, section1Offset + 156);
-
-                //actual number of Extrude Points = number of Extrude Points in binary file + 1
-                section3Count += section3Count >= 1 ? 1 : 0;
-             
-
-
 
                 newEntry.I_108 = BitConverter.ToUInt16(bytes, section1Offset + 108);
                 newEntry.Color1_R = BitConverter.ToSingle(bytes, section1Offset + 120);
@@ -72,15 +51,23 @@ namespace Xv2CoreLib.ETR
                 newEntry.Color2_B = BitConverter.ToSingle(bytes, section1Offset + 144);
                 newEntry.Color2_A = BitConverter.ToSingle(bytes, section1Offset + 148);
 
-              
-                for(int j = 0; j < section3Count; j++)
+                //Unleashed PR:
+                //+16 is to skip the 4 floats for EndPoint that come BEFORE Extrude Points
+                //XenoXMLConverter output has it come after 
+                int extrudePointOffset = BitConverter.ToInt32(bytes, section1Offset + 116) + section1Offset + 16;
+                int extrudePointCount = BitConverter.ToInt32(bytes, section1Offset + 156);
+
+                //actual number of Extrude Points = number of Extrude Points in binary file + 1
+                extrudePointCount += extrudePointCount >= 1 ? 1 : 0;
+
+                for (int j = 0; j < extrudePointCount; j++)
                 {
-                    float X = BitConverter.ToSingle(bytes, section3Offset);
-                    float Y = BitConverter.ToSingle(bytes, section3Offset + 4);
+                    float X = BitConverter.ToSingle(bytes, extrudePointOffset);
+                    float Y = BitConverter.ToSingle(bytes, extrudePointOffset + 4);
 
-                    newEntry.ExtrudePoints.Add(new Point(X, Y));
+                    newEntry.ExtrudePoints.Add(new ETR_Point(X, Y));
 
-                    section3Offset += 8;
+                    extrudePointOffset += 8;
                 }
 
                 //Parse main entry
@@ -105,18 +92,10 @@ namespace Xv2CoreLib.ETR
         {
             int section1Count = BitConverter.ToInt16(Bytes, 12);
             int section2Count = BitConverter.ToInt16(Bytes, 14);
-            int section3Count = 0;
             int section1Offset = BitConverter.ToInt32(Bytes, 16);
             int section2Offset = BitConverter.ToInt32(Bytes, 20);
-            int section3Offset = 0;
 
-
-
-
-
-
-
-            if (section1Count != ETR_Entries.Count)
+            if(section1Count != ETR_Entries.Count)
             {
                 throw new InvalidDataException("Etr save fail: number of section1 entries in binary file is not equal to the ones in code.");
             }
@@ -132,16 +111,23 @@ namespace Xv2CoreLib.ETR
                 Bytes[section1Offset + 108] = emmIndex[0];
                 Bytes[section1Offset + 109] = emmIndex[1];
 
-                section3Offset = BitConverter.ToInt32(Bytes, section1Offset + 116) + section1Offset + 16;
-                section3Count = BitConverter.ToInt32(Bytes, section1Offset + 156);
+                //Extrude
+                int extrudePointOffset = BitConverter.ToInt32(Bytes, section1Offset + 116) + section1Offset + 16;
+                int extrudePointCount = BitConverter.ToInt32(Bytes, section1Offset + 156);
 
+                extrudePointCount += extrudePointCount >= 1 ? 1 : 0;
 
-
-                section3Count += section3Count >= 1 ? 1 : 0;
-
-                if (section3Count != ETR_Entries[i].ExtrudePoints.Count)
+                if (extrudePointCount != ETR_Entries[i].ExtrudePoints.Count)
                 {
                     throw new InvalidDataException($"Etr save fail: number of extrude points for part index {i} in binary file is not equal to the ones in code.");
+                }
+
+                for (int j = 0; j < ETR_Entries[i].ExtrudePoints.Count; j++)
+                {
+                    Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].ExtrudePoints[j].X), extrudePointOffset);
+                    Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].ExtrudePoints[j].Y), extrudePointOffset + 4);
+
+                    extrudePointOffset += 8;
                 }
 
                 //Colors
@@ -153,16 +139,6 @@ namespace Xv2CoreLib.ETR
                 Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].Color2_G), section1Offset + 140);
                 Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].Color2_B), section1Offset + 144);
                 Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].Color2_A), section1Offset + 148);
-
-
-
-                for(int j = 0; j < ETR_Entries[i].ExtrudePoints.Count; j++)
-                {
-                    Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].ExtrudePoints[j].X), section3Offset);
-                    Bytes = Utils.ReplaceRange(Bytes, BitConverter.GetBytes(ETR_Entries[i].ExtrudePoints[j].Y), section3Offset + 4);
-
-                    section3Offset += 8;
-                }
 
                 section1Offset += 176;
             }
@@ -181,8 +157,9 @@ namespace Xv2CoreLib.ETR
             return Bytes;
         }
 
-        public void RemoveColorAnimations()
+        public void RemoveColorAnimations(List<IUndoRedo> undos = null)
         {
+            if (undos == null) undos = new List<IUndoRedo>();
             //Parse the byte array and for all Type0 Animations that have Color Component R,G,B, change keyframes/floats to 0.
 
             int section1Count = BitConverter.ToInt16(Bytes, 12);
@@ -207,6 +184,10 @@ namespace Xv2CoreLib.ETR
                             //Color Factor
                             if(component == 0 || component == 1 || component == 2)
                             {
+                                //Create undoable steps
+                                undos.Add(new UndoableArrayChange<byte>(Bytes, type0Offset + 6, Bytes[type0Offset + 6], 0));
+                                undos.Add(new UndoableArrayChange<byte>(Bytes, type0Offset + 7, Bytes[type0Offset + 7], 0));
+
                                 //Nullify keyframe count
                                 Bytes[type0Offset + 6] = 0;
                                 Bytes[type0Offset + 7] = 0;
@@ -250,12 +231,13 @@ namespace Xv2CoreLib.ETR
             return colors;
         }
 
-        public void ChangeHue(double hue, double saturation, double lightness)
+        public void ChangeHue(double hue, double saturation, double lightness, List<IUndoRedo> undos = null, bool hueSet = false, int variance = 0)
         {
-            //Remove color animations as we cant hue shift them without a full ETR parser.
-            RemoveColorAnimations();
-
             if (ETR_Entries == null) return;
+            if (undos == null) undos = new List<IUndoRedo>();
+
+            //Remove color animations as we cant hue shift them without a full ETR parser.
+            RemoveColorAnimations(undos);
 
             foreach(var etrEntry in ETR_Entries)
             {
@@ -265,10 +247,26 @@ namespace Xv2CoreLib.ETR
                     if (etrEntry.Color1_R != 1.0 || etrEntry.Color1_G != 1.0 || etrEntry.Color1_B != 1.0)
                     {
                         HslColor.HslColor newCol1 = new RgbColor(etrEntry.Color1_R, etrEntry.Color1_G, etrEntry.Color1_B).ToHsl();
-                        newCol1.ChangeHue(hue);
-                        newCol1.ChangeSaturation(saturation);
-                        newCol1.ChangeLightness(lightness);
-                        RgbColor convertedColor = newCol1.ToRgb();
+
+                        RgbColor convertedColor;
+
+                        if (hueSet)
+                        {
+                            newCol1.SetHue(hue, variance);
+                        }
+                        else
+                        {
+                            newCol1.ChangeHue(hue);
+                            newCol1.ChangeSaturation(saturation);
+                            newCol1.ChangeLightness(lightness);
+                        }
+
+                        convertedColor = newCol1.ToRgb();
+
+                        undos.Add(new UndoableProperty<ETR_MainEntry>(nameof(etrEntry.Color1_R), etrEntry, etrEntry.Color1_R, (float)convertedColor.R));
+                        undos.Add(new UndoableProperty<ETR_MainEntry>(nameof(etrEntry.Color1_G), etrEntry, etrEntry.Color1_G, (float)convertedColor.G));
+                        undos.Add(new UndoableProperty<ETR_MainEntry>(nameof(etrEntry.Color1_B), etrEntry, etrEntry.Color1_B, (float)convertedColor.B));
+
                         etrEntry.Color1_R = (float)convertedColor.R;
                         etrEntry.Color1_G = (float)convertedColor.G;
                         etrEntry.Color1_B = (float)convertedColor.B;
@@ -281,10 +279,25 @@ namespace Xv2CoreLib.ETR
                     if (etrEntry.Color2_R != 1.0 || etrEntry.Color2_G != 1.0 || etrEntry.Color2_B != 1.0)
                     {
                         HslColor.HslColor newCol1 = new RgbColor(etrEntry.Color2_R, etrEntry.Color2_G, etrEntry.Color2_B).ToHsl();
-                        newCol1.ChangeHue(hue);
-                        newCol1.ChangeSaturation(saturation);
-                        newCol1.ChangeLightness(lightness);
-                        RgbColor convertedColor = newCol1.ToRgb();
+                        RgbColor convertedColor;
+
+                        if (hueSet)
+                        {
+                            newCol1.SetHue(hue, variance);
+                        }
+                        else
+                        {
+                            newCol1.ChangeHue(hue);
+                            newCol1.ChangeSaturation(saturation);
+                            newCol1.ChangeLightness(lightness);
+                        }
+
+                        convertedColor = newCol1.ToRgb();
+
+                        undos.Add(new UndoableProperty<ETR_MainEntry>(nameof(etrEntry.Color2_R), etrEntry, etrEntry.Color2_R, (float)convertedColor.R));
+                        undos.Add(new UndoableProperty<ETR_MainEntry>(nameof(etrEntry.Color2_G), etrEntry, etrEntry.Color2_G, (float)convertedColor.G));
+                        undos.Add(new UndoableProperty<ETR_MainEntry>(nameof(etrEntry.Color2_B), etrEntry, etrEntry.Color2_B, (float)convertedColor.B));
+
                         etrEntry.Color2_R = (float)convertedColor.R;
                         etrEntry.Color2_G = (float)convertedColor.G;
                         etrEntry.Color2_B = (float)convertedColor.B;
@@ -294,15 +307,26 @@ namespace Xv2CoreLib.ETR
 
         }
 
-        //scales all the Extrude Points found in all Parts
-        public void ScaleETRParts(float scaleFactor)
+        /// <summary>
+        /// Scales all the Extrude Points found in all Parts
+        /// </summary>
+        public void ScaleETRParts(float scaleFactor, List<IUndoRedo> undos = null)
         {
             foreach (var etrEntry in ETR_Entries)
             {
                 foreach (var point in etrEntry.ExtrudePoints)
                 {
+                    float oldX = point.X;
+                    float oldY = point.Y;
+
                     point.X *= scaleFactor;
                     point.Y *= scaleFactor;
+
+                    if(undos != null)
+                    {
+                        undos.Add(new UndoableProperty<ETR_Point>(nameof(point.X), point, oldX, point.X));
+                        undos.Add(new UndoableProperty<ETR_Point>(nameof(point.Y), point, oldY, point.Y));
+                    }
                 }
             }
         }
@@ -313,7 +337,6 @@ namespace Xv2CoreLib.ETR
     {
         public EMM.Material MaterialRef { get; set; }
 
-        public List<Point> ExtrudePoints { get; set; }
         public ushort I_108 { get; set; } //EMM Index
         
 
@@ -326,10 +349,9 @@ namespace Xv2CoreLib.ETR
         public float Color2_G { get; set; }
         public float Color2_B { get; set; }
         public float Color2_A { get; set; }
-        public ETR_MainEntry()
-        {
-            ExtrudePoints = new List<Point>();
-        }
+
+        public List<ETR_Point> ExtrudePoints { get; set; } = new List<ETR_Point>();
+
     }
 
     [Serializable]
@@ -355,6 +377,18 @@ namespace Xv2CoreLib.ETR
       
     }
 
+    [Serializable]
+    public class ETR_Point
+    {
+        public float X { get; set; }
+        public float Y { get; set; }
 
+        public ETR_Point(float _x, float _y)
+        {
+            X = _x;
+            Y = _y;
+        }
+
+    }
 
 }

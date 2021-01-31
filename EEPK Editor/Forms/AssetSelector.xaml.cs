@@ -1,4 +1,6 @@
-﻿using System;
+﻿using EEPK_Organiser.View;
+using MahApps.Metro.Controls;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -21,7 +23,7 @@ namespace EEPK_Organiser.Forms
     /// <summary>
     /// Interaction logic for AssetSelector.xaml
     /// </summary>
-    public partial class AssetSelector : Window, INotifyPropertyChanged
+    public partial class AssetSelector : MetroWindow, INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -71,17 +73,18 @@ namespace EEPK_Organiser.Forms
         public ObservableCollection<Asset> MergedAssetList = null;
         public ListCollectionView ViewMergedAsserList { get; set; }
 
-        public AssetSelector(EffectContainerFile _effectFile, bool multiSelect, bool _constrained = false, Xv2CoreLib.EEPK.AssetType _constrainedAssetType = Xv2CoreLib.EEPK.AssetType.EMO, Window parent = null, Asset initialSelection = null)
+        public AssetSelector(EffectContainerFile _effectFile, bool multiSelect, bool _constrained = false, Xv2CoreLib.EEPK.AssetType _constrainedAssetType = Xv2CoreLib.EEPK.AssetType.EMO, EepkEditor parent = null, Asset initialSelection = null)
         {
             MultiSelectMode = multiSelect;
             effectContainerFile = _effectFile;
             ConstrainedAssetType = _constrainedAssetType;
             Constrained = _constrained;
             InitializeComponent();
-            Owner = parent;
+            Owner = Application.Current.MainWindow;
             DataContext = this;
             InitializeTabs(initialSelection);
             InitializeSearchTab();
+
             if (MultiSelectMode)
             {
                 emoGrid.SelectionMode = DataGridSelectionMode.Extended;
@@ -102,8 +105,24 @@ namespace EEPK_Organiser.Forms
                 multiSelectTip.Visibility = Visibility.Hidden;
             }
 
+            //Events
+            emoGrid.PreviewKeyUp += MetroWindow_PreviewKeyDown;
+            pbindGrid.PreviewKeyUp += MetroWindow_PreviewKeyDown;
+            tbindGrid.PreviewKeyUp += MetroWindow_PreviewKeyDown;
+            cbindGrid.PreviewKeyUp += MetroWindow_PreviewKeyDown;
+            lightEmaGrid.PreviewKeyUp += MetroWindow_PreviewKeyDown;
+            searchGrid.PreviewKeyUp += MetroWindow_PreviewKeyDown;
+
+            emoGrid.MouseDoubleClick += EmoGrid_MouseDoubleClick;
+            pbindGrid.MouseDoubleClick += EmoGrid_MouseDoubleClick;
+            tbindGrid.MouseDoubleClick += EmoGrid_MouseDoubleClick;
+            cbindGrid.MouseDoubleClick += EmoGrid_MouseDoubleClick;
+            lightEmaGrid.MouseDoubleClick += EmoGrid_MouseDoubleClick;
+            searchGrid.MouseDoubleClick += EmoGrid_MouseDoubleClick;
+
 
         }
+
 
         private void InitializeTabs(Asset initialSel)
         {
@@ -120,22 +139,27 @@ namespace EEPK_Organiser.Forms
                     case Xv2CoreLib.EEPK.AssetType.EMO:
                         emoTab.IsEnabled = true;
                         emoTab.IsSelected = true;
+                        emoTab.Focus();
                         break;
                     case Xv2CoreLib.EEPK.AssetType.PBIND:
                         pbindTab.IsEnabled = true;
                         pbindTab.IsSelected = true;
+                        pbindGrid.Focus();
                         break;
                     case Xv2CoreLib.EEPK.AssetType.TBIND:
                         tbindTab.IsEnabled = true;
                         tbindTab.IsSelected = true;
+                        tbindGrid.Focus();
                         break;
                     case Xv2CoreLib.EEPK.AssetType.LIGHT:
                         lightEmaTab.IsEnabled = true;
                         lightEmaTab.IsSelected = true;
+                        lightEmaGrid.Focus();
                         break;
                     case Xv2CoreLib.EEPK.AssetType.CBIND:
                         cbindTab.IsEnabled = true;
                         cbindTab.IsSelected = true;
+                        cbindGrid.Focus();
                         break;
                 }
             }
@@ -362,6 +386,25 @@ namespace EEPK_Organiser.Forms
         {
             if(e.Key == Key.Enter)
                 UpdateAssetFilter();
+        }
+
+
+        private void MetroWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if(e.Key == Key.Enter)
+            {
+                Button_OK_Click(null, null);
+                e.Handled = true;
+            }
+        }
+
+        private void EmoGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.LeftButton == MouseButtonState.Pressed)
+            {
+                Button_OK_Click(null, null);
+                e.Handled = true;
+            }
         }
     }
 }

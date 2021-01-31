@@ -73,6 +73,11 @@ namespace Xv2CoreLib.Resource.UndoRedo
             NotifyPropertyChanged("RedoDescription");
         }
 
+        public void AddCompositeUndo(List<IUndoRedo> undos, string message)
+        {
+            AddUndo(new CompositeUndo(undos, message));
+        }
+
 #if NvvmLight
         public RelayCommand RedoCommand => new RelayCommand(Redo, CanRedo);
 
@@ -126,6 +131,12 @@ namespace Xv2CoreLib.Resource.UndoRedo
             NotifyPropertyChanged("RedoDescription");
         }
 
+
+#if DEBUG
+        //For debugging purposes
+        public LimitedStack<IUndoRedo> GetUndoStack() { return undoStack; }
+        public LimitedStack<IUndoRedo> GetRedoStack() { return redoStack; }
+#endif
 
     }
     

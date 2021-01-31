@@ -1,29 +1,21 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using Xv2CoreLib.EMB_CLASS;
 using System.Drawing;
-using AForge.Imaging;
 using System.ComponentModel;
 using System.Diagnostics;
 using AForge;
+using MahApps.Metro.Controls;
+using Xv2CoreLib.Resource.UndoRedo;
 
-namespace EEPK_Organiser.Forms
+namespace EEPK_Organiser.Forms.Recolor
 {
     /// <summary>
-    /// Interaction logic for TextureEditHueChange.xaml
+    /// Interaction logic for RecolorTexture_HueSet.xaml
     /// </summary>
-    public partial class TextureEditHueChange : Window, INotifyPropertyChanged
+    public partial class RecolorTexture_HueSet : MetroWindow, INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
 
@@ -56,40 +48,8 @@ namespace EEPK_Organiser.Forms
                 }
             }
         }
-        private double _saturationValue = 0;
-        public double SaturationValue
-        {
-            get
-            {
-                return this._saturationValue;
-            }
-            set
-            {
-                if (value != this._saturationValue)
-                {
-                    this._saturationValue = value;
-                    NotifyPropertyChanged("SaturationValue");
-                }
-            }
-        }
-        private double _lightnessValue = 0;
-        public double LightnessValue
-        {
-            get
-            {
-                return this._lightnessValue;
-            }
-            set
-            {
-                if (value != this._lightnessValue)
-                {
-                    this._lightnessValue = value;
-                    NotifyPropertyChanged("LightnessValue");
-                }
-            }
-        }
-
         
+
         //Time
         private Stopwatch stopwatch = new Stopwatch();
         private bool isImageProcessing = false;
@@ -105,7 +65,7 @@ namespace EEPK_Organiser.Forms
             }
         }
 
-        public TextureEditHueChange(EmbEntry _texture, Window parent)
+        public RecolorTexture_HueSet(EmbEntry _texture, Window parent)
         {
             CurrentTexture = _texture;
             InitializeComponent();
@@ -120,6 +80,7 @@ namespace EEPK_Organiser.Forms
         {
             cancelled = false;
             CurrentTexture.wasEdited = true;
+            UndoManager.Instance.AddUndo(new UndoableProperty<EmbEntry>(nameof(EmbEntry.DdsImage), CurrentTexture, OriginalTextureBackup, CurrentTexture.DdsImage, "Hue Set"));
             Close();
         }
 
@@ -143,53 +104,20 @@ namespace EEPK_Organiser.Forms
             //If enough time has not passed since the last process then we must enter a waiting state
             if (stopwatch.ElapsedMilliseconds < previewDelay)
             {
-                //For loop is safer than while.
-                for(int wait = 0; wait < previewDelay; wait += previewDelayWait)
+                for (int wait = 0; wait < previewDelay; wait += previewDelayWait)
                 {
                     if (stopwatch.ElapsedMilliseconds >= previewDelay) break;
                     await Task.Delay(previewDelayWait);
                 }
-
-                //while(stopwatch.ElapsedMilliseconds < previewDelay)
-                //{
-                //    await Task.Delay(10);
-                //}
             }
 
             //Create System.Drawing.Bitmap
             Bitmap bitmap = (Bitmap)OriginalTextureBackup;
             // Apply filters
-            var hueFilter = new AForge.Imaging.Filters.HueAdjustment(HueValue);
-            var satFilter = new AForge.Imaging.Filters.SaturationCorrection((float)SaturationValue);
-            var hslFilter = new AForge.Imaging.Filters.HSLLinear();
+            var hueFilter = new AForge.Imaging.Filters.HueModifier(HueValue);
 
-            float brightness = (float)LightnessValue;
-
-            if (brightness > 0)
-            {
-                hslFilter.InLuminance = new Range(0.0f, 1.0f - brightness); //TODO - isn't it better not to truncate, but compress?
-                hslFilter.OutLuminance = new Range(brightness, 1.0f);
-            }
-            else
-            {
-                hslFilter.InLuminance = new Range(-brightness, 1.0f);
-                hslFilter.OutLuminance = new Range(0.0f, 1.0f + brightness);
-            }
-            // create saturation filter
-            float saturation = (float)SaturationValue;
-            if (saturation > 0)
-            {
-                hslFilter.InSaturation = new Range(0.0f, 1.0f - saturation); //Ditto?
-                hslFilter.OutSaturation = new Range(saturation, 1.0f);
-            }
-            else
-            {
-                hslFilter.InSaturation = new Range(-saturation, 1.0f);
-                hslFilter.OutSaturation = new Range(0.0f, 1.0f + saturation);
-            }
 
             bitmap = hueFilter.Apply(bitmap);
-            hslFilter.ApplyInPlace(bitmap);
 
             //Convert back to WPF Bitmap
             CurrentTexture.DdsImage = (WriteableBitmap)bitmap;
@@ -214,21 +142,10 @@ namespace EEPK_Organiser.Forms
             ProcessImage();
         }
 
-        private void Button_UndoSaturationChange_Click(object sender, RoutedEventArgs e)
+        private void IntegerUpDown_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double?> e)
         {
-            SaturationValue = 0;
             ProcessImage();
         }
 
-        private void Button_UndoLightnessChange_Click(object sender, RoutedEventArgs e)
-        {
-            LightnessValue = 0;
-            ProcessImage();
-        }
-
-        private void IntegerUpDown_ValueChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
-        {
-            ProcessImage();
-        }
     }
 }

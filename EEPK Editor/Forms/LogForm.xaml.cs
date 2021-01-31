@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MahApps.Metro.Controls;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -17,7 +18,7 @@ namespace EEPK_Organiser.Forms
     /// <summary>
     /// Interaction logic for LogForm.xaml
     /// </summary>
-    public partial class LogForm : Window
+    public partial class LogForm : MetroWindow
     {
         public string Description { get; set; }
 

@@ -1,17 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using MahApps.Metro.Controls;
+using System;
 using System.ComponentModel;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shapes;
 using Xv2CoreLib.EMB_CLASS;
 
 namespace EEPK_Organiser.Forms
@@ -19,7 +9,7 @@ namespace EEPK_Organiser.Forms
     /// <summary>
     /// Interaction logic for TextureSelector.xaml
     /// </summary>
-    public partial class TextureSelector : Window, INotifyPropertyChanged
+    public partial class TextureSelector : MetroWindow, INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
 

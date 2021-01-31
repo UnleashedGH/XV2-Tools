@@ -16,7 +16,7 @@ namespace Xv2CoreLib.Resource.UndoRedo
         private T originalState;
         private T changedState;
 
-        public UndoableStateChange(IList<T> _list, int _idx, T _originalState, T _changedState, string message)
+        public UndoableStateChange(IList<T> _list, int _idx, T _originalState, T _changedState, string message = null)
         {
             idx = _idx;
             list = _list;

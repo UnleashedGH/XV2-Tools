@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Xv2CoreLib.HslColor;
+using Xv2CoreLib.Resource.UndoRedo;
 using YAXLib;
 
 namespace Xv2CoreLib.EMA
@@ -367,13 +368,14 @@ namespace Xv2CoreLib.EMA
             return colors;
         }
 
-        public void ChangeHue(double hue, double saturation, double lightness)
+        public void ChangeHue(double hue, double saturation, double lightness, List<IUndoRedo> undos = null, bool hueSet = false, int variance = 0)
         {
             if (Animations == null) return;
+            if (undos == null) undos = new List<IUndoRedo>();
 
             foreach (var anim in Animations)
             {
-                anim.ChangeHue(hue, saturation, lightness);
+                anim.ChangeHue(hue, saturation, lightness, undos, hueSet, variance);
             }
         }
 
@@ -650,7 +652,7 @@ namespace Xv2CoreLib.EMA
             return colors;
         }
 
-        public void ChangeHue(double hue, double saturation, double lightness)
+        public void ChangeHue(double hue, double saturation, double lightness, List<IUndoRedo> undos, bool hueSet = false, int variance = 0)
         {
             var r_command = GetCommand("Color", "R");
             var g_command = GetCommand("Color", "G");
@@ -662,14 +664,24 @@ namespace Xv2CoreLib.EMA
                 var b = b_command.GetValue(r.Time);
 
                 var hslColor = new RgbColor(r.Value, g, b).ToHsl();
-                hslColor.ChangeHue(hue);
-                hslColor.ChangeSaturation(saturation);
-                hslColor.ChangeLightness(lightness);
-                var convertedColor = hslColor.ToRgb();
+                RgbColor convertedColor;
 
-                r.Value = (float)convertedColor.R;
-                g_command.SetValue(r.Time, (float)convertedColor.G);
-                b_command.SetValue(r.Time, (float)convertedColor.B);
+                if (hueSet)
+                {
+                    hslColor.SetHue(hue, variance);
+                }
+                else
+                {
+                    hslColor.ChangeHue(hue);
+                    hslColor.ChangeSaturation(saturation);
+                    hslColor.ChangeLightness(lightness);
+                }
+
+                convertedColor = hslColor.ToRgb();
+
+                r_command.SetValue(r.Time, (float)convertedColor.R, undos);
+                g_command.SetValue(r.Time, (float)convertedColor.G, undos);
+                b_command.SetValue(r.Time, (float)convertedColor.B, undos);
             }
 
         }
@@ -1044,13 +1056,18 @@ namespace Xv2CoreLib.EMA
             return CalculateKeyframeValue(time);
         }
 
-        public void SetValue(int time, float value)
+        public void SetValue(int time, float value, List<IUndoRedo> undos = null)
         {
             foreach (var keyframe in Keyframes)
             {
                 if (keyframe.Time == time)
                 {
+                    float oldValue = keyframe.Value;
                     keyframe.Value = value;
+
+                    if (undos != null)
+                        undos.Add(new UndoableProperty<EMA_Keyframe>(nameof(keyframe.Value), keyframe, oldValue, keyframe.Value));
+
                     return;
                 }
             }

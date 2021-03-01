@@ -218,6 +218,7 @@
     <Compile Include="ESK\Deserializer.cs" />
     <Compile Include="ESK\ESK_File.cs" />
     <Compile Include="ESK\Parser.cs" />
+    <Compile Include="Eternity\CharaSlotsFile.cs" />
     <Compile Include="ETR\ETR_File.cs" />
     <Compile Include="FPF\FPF_File.cs" />
     <Compile Include="HCA\HcaMetadata.cs" />
@@ -275,9 +276,13 @@
     <Compile Include="QXD\Deserializer.cs" />
     <Compile Include="QXD\Parser.cs" />
     <Compile Include="QXD\QXD_File.cs" />
+    <Compile Include="Resource\App\Settings.cs" />
+    <Compile Include="Resource\App\SettingsFormat.cs" />
+    <Compile Include="Resource\AsyncObservableCollection.cs" />
     <Compile Include="Resource\BinaryConverter.cs" />
     <Compile Include="Resource\ColorEx.cs" />
     <Compile Include="Resource\Random.cs" />
+    <Compile Include="Resource\ReflectionHelper.cs" />
     <Compile Include="Resource\UndoRedo\UndoableArrayChange.cs" />
     <Compile Include="Resource\UndoRedo\UndoableListInsert.cs" />
     <Compile Include="Resource\UndoRedo\UndoableListMove.cs" />
@@ -314,7 +319,6 @@
     <Compile Include="TTB\TTB_File.cs" />
     <Compile Include="TTC\TTC_File.cs" />
     <Compile Include="UTF\UTF_File.cs" />
-    <Compile Include="X2M\Skill.cs" />
     <Compile Include="Xenoverse2.cs" />
   </ItemGroup>
   <ItemGroup>

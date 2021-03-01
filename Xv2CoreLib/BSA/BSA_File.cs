@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using Xv2CoreLib.Resource;
 using YAXLib;
 
 namespace Xv2CoreLib.BSA
@@ -23,7 +24,9 @@ namespace Xv2CoreLib.BSA
     public enum AcbType
     {
         Common_SE = 0,
+        Chara_SE = 1,
         Skill_SE = 3
+        //Chara_VOX = 2 and Skill_VOX = 4?
     }
     
     public enum Switch
@@ -233,13 +236,13 @@ namespace Xv2CoreLib.BSA
 
         #region IBsaTypes
         [YAXDontSerialize]
-        public ObservableCollection<IBsaType> IBsaTypes { get; set; }
+        public AsyncObservableCollection<IBsaType> IBsaTypes { get; set; }
 
         public void InitializeIBsaTypes()
         {
             InitBsaLists();
 
-            IBsaTypes = new ObservableCollection<IBsaType>();
+            IBsaTypes = AsyncObservableCollection<IBsaType>.Create();
 
             foreach (var bsaEntry in Type0)
                 IBsaTypes.Add(bsaEntry);

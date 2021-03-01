@@ -27,6 +27,9 @@ using MahApps.Metro.Controls.Dialogs;
 using EEPK_Organiser.ViewModel;
 using GalaSoft.MvvmLight.CommandWpf;
 using EEPK_Organiser.Forms.Recolor;
+using Xv2CoreLib.Resource.App;
+using Application = System.Windows.Application;
+using Xv2CoreLib.Resource;
 
 namespace EEPK_Organiser.View
 {
@@ -121,7 +124,7 @@ namespace EEPK_Organiser.View
         {
             get
             {
-                if(Xenoverse2.Instance.IsInitialized && _loadHelper == null)
+                if (Xenoverse2.Instance.IsInitialized && _loadHelper == null)
                 {
                     loadHelper = new LoadFromGameHelper();
                 }
@@ -171,14 +174,14 @@ namespace EEPK_Organiser.View
             //Load NameLists
             nameListManager = new NameList.NameListManager();
 
-            
+
         }
 
         public void SaveExceptionLog(string ex)
         {
             try
             {
-                File.WriteAllText(GeneralInfo.ERROR_LOG_PATH, ex);
+                File.WriteAllText(SettingsManager.Instance.GetErrorLogPath(), ex);
             }
             catch
             {
@@ -188,7 +191,7 @@ namespace EEPK_Organiser.View
 
 
         //Loading
-        public EffectContainerFile LoadEffectContainerFile(bool cacheFile = true)
+        public async Task<EffectContainerFile> LoadEffectContainerFile(bool cacheFile = true)
         {
             OpenFileDialog openFile = new OpenFileDialog();
             openFile.Title = "Open EEPK file...";
@@ -197,105 +200,112 @@ namespace EEPK_Organiser.View
             openFile.Filter = string.Format("EEPK File | *.eepk; |{1} File |*{0};", EffectContainerFile.ZipExtension, EffectContainerFile.ZipExtension.ToUpper().Remove(0, 1));
             openFile.ShowDialog();
 
-            return LoadEffectContainerFile(openFile.FileName, cacheFile);
+            return await LoadEffectContainerFile(openFile.FileName, cacheFile);
         }
 
-        public EffectContainerFile LoadEffectContainerFile(string path, bool cacheFile = true)
+        public async Task<EffectContainerFile> LoadEffectContainerFile(string path, bool cacheFile = true)
         {
             try
             {
                 if (File.Exists(path) && !string.IsNullOrWhiteSpace(path))
                 {
-
-                    Forms.ProgressBarFileLoad progressBarForm = new Forms.ProgressBarFileLoad(path, App.Current.MainWindow, null);
-                    progressBarForm.ShowDialog();
-
-                    if (progressBarForm.exception != null)
-                    {
-                        ExceptionDispatchInfo.Capture(progressBarForm.exception).Throw();
-                    }
-                    if (progressBarForm.effectContainerFile == null)
-                    {
-                        throw new FileLoadException("The file load was interupted.");
-                    }
+                    var loadedFile = await LoadFileAsync(path, false, false);
 
                     //Apply namelist
-                    nameListManager.EepkLoaded(progressBarForm.effectContainerFile);
+                    nameListManager.EepkLoaded(loadedFile);
 
                     //Cache the file
                     if (cacheFile)
                     {
-                        cacheManager.CacheFile(path, progressBarForm.effectContainerFile, "File");
+                        cacheManager.CacheFile(path, loadedFile, "File");
                     }
                     else
                     {
                         cacheManager.RemoveCachedFile(path);
                     }
 
-                    return progressBarForm.effectContainerFile;
+                    return loadedFile;
                 }
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("Load failed.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Open", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("Load failed.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Open", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 
             return null;
         }
 
-        public EffectContainerFile LoadEepkFromGame(Forms.EntitySelector.EntityType type, bool cacheFile = true)
+        public async Task<EffectContainerFile> LoadEepkFromGame(Forms.EntitySelector.EntityType type, bool cacheFile = true)
         {
+            if (!SettingsManager.settings.ValidGameDir) throw new Exception("Game directory is not valid. Please set the game directory in the settings menu (File > Settings).");
+
+            Forms.EntitySelector entitySelector = new Forms.EntitySelector(loadHelper, type, App.Current.MainWindow);
+            entitySelector.ShowDialog();
+
+            if (entitySelector.SelectedEntity != null)
+            {
+                var loadedFile = await LoadFileAsync(entitySelector.SelectedEntity.EepkPath, true, entitySelector.OnlyLoadFromCPK);
+
+                //Apply namelist
+                nameListManager.EepkLoaded(loadedFile);
+
+                //Cache the file
+                if (cacheFile)
+                {
+                    cacheManager.CacheFile(entitySelector.SelectedEntity.EepkPath, loadedFile, type.ToString());
+                }
+                else
+                {
+                    cacheManager.RemoveCachedFile(entitySelector.SelectedEntity.EepkPath);
+                }
+
+                loadedFile.LoadedExternalFiles.Clear();
+                loadedFile.Directory = string.Format("{0}/data/{1}", SettingsManager.settings.GameDirectory, loadedFile.Directory);
+
+                return loadedFile;
+            }
+
+            return null;
+        }
+
+        private async Task<EffectContainerFile> LoadFileAsync(string path, bool fromGame, bool onlyFromCpk)
+        {
+            var controller = await ((MetroWindow)App.Current.MainWindow).ShowProgressAsync($"Loading...", $"", false, new MetroDialogSettings() { DialogTitleFontSize = 16, DialogMessageFontSize = 12, AnimateHide = false, AnimateShow = false });
+            controller.SetIndeterminate();
+
+            EffectContainerFile loadedFile = null;
+
             try
             {
-                if (!GeneralInfo.AppSettings.ValidGameDir) throw new Exception("Game directory is not valid. Please set the game directory in the settings menu (File > Settings).");
-
-                Forms.EntitySelector entitySelector = new Forms.EntitySelector(loadHelper, type, App.Current.MainWindow);
-                entitySelector.ShowDialog();
-
-                if (entitySelector.SelectedEntity != null)
+                await Task.Run(() =>
                 {
-                    Forms.ProgressBarFileLoad progressBarForm = new Forms.ProgressBarFileLoad(entitySelector.SelectedEntity.EepkPath, App.Current.MainWindow, Xenoverse2.Instance.GetFileIO(), entitySelector.OnlyLoadFromCPK);
-                    progressBarForm.ShowDialog();
-
-                    if (progressBarForm.exception != null)
+                    if (!fromGame)
                     {
-                        ExceptionDispatchInfo.Capture(progressBarForm.exception).Throw();
-                    }
-                    if (progressBarForm.effectContainerFile == null)
-                    {
-                        throw new FileLoadException("The file load was interupted.");
-                    }
-
-                    //Apply namelist
-                    nameListManager.EepkLoaded(progressBarForm.effectContainerFile);
-
-                    //Cache the file
-                    if (cacheFile)
-                    {
-                        cacheManager.CacheFile(entitySelector.SelectedEntity.EepkPath, progressBarForm.effectContainerFile, type.ToString());
+                        //Load files directly
+                        if (Path.GetExtension(path) == ".eepk")
+                        {
+                            loadedFile = EffectContainerFile.Load(path);
+                        }
+                        else if (Path.GetExtension(path) == EffectContainerFile.ZipExtension)
+                        {
+                            loadedFile = EffectContainerFile.LoadVfx2(path);
+                        }
                     }
                     else
                     {
-                        cacheManager.RemoveCachedFile(entitySelector.SelectedEntity.EepkPath);
+                        //Load from game
+                        loadedFile = EffectContainerFile.Load(path, Xenoverse2.Instance.GetFileIO(), onlyFromCpk);
                     }
-
-                    progressBarForm.effectContainerFile.LoadedExternalFiles.Clear();
-                    progressBarForm.effectContainerFile.Directory = string.Format("{0}/data/{1}", GeneralInfo.AppSettings.GameDirectory, progressBarForm.effectContainerFile.Directory);
-
-                    return progressBarForm.effectContainerFile;
-                }
-
+                });
             }
-            catch (Exception ex)
+            finally
             {
-                SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                await controller.CloseAsync();
             }
 
-            return null;
+            return loadedFile;
         }
-
 
 
         //Main TabControl
@@ -342,7 +352,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -399,7 +409,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 
         }
@@ -418,7 +428,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -436,7 +446,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -454,7 +464,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -472,7 +482,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -506,7 +516,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -572,7 +582,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -615,7 +625,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -629,7 +639,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -691,7 +701,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -718,63 +728,63 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EMO_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
             ImportEmoAssets(effectFile);
         }
 
-        public void EMO_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
             ImportEmoAssets(effectFile);
         }
 
-        public void EMO_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
             ImportEmoAssets(effectFile);
         }
 
-        public void EMO_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
             ImportEmoAssets(effectFile);
         }
 
-        public void EMO_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
             ImportEmoAssets(effectFile);
         }
 
-        public void EMO_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
             ImportEmoAssets(effectFile);
         }
 
-        public void EMO_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
             ImportEmoAssets(effectFile);
         }
 
-        public void EMO_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
+        public async void EMO_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
             ImportEmoAssets(effectFile);
         }
 
@@ -789,7 +799,7 @@ namespace EEPK_Organiser.View
                 catch (Exception ex)
                 {
                     SaveExceptionLog(ex.ToString());
-                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
@@ -815,7 +825,7 @@ namespace EEPK_Organiser.View
                     Asset asset = new Asset()
                     {
                         assetType = AssetType.EMO,
-                        Files = new ObservableCollection<EffectFile>()
+                        Files = AsyncObservableCollection<EffectFile>.Create()
                     };
 
                     foreach (var file in openFile.FileNames)
@@ -848,7 +858,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -866,7 +876,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -879,7 +889,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -894,7 +904,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -930,7 +940,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -946,7 +956,7 @@ namespace EEPK_Organiser.View
                 {
                     Forms.RecolorAll recolor = new Forms.RecolorAll(AssetType.EMO, asset, Application.Current.MainWindow);
 
-                    if(recolor.Initialize())
+                    if (recolor.Initialize())
                         recolor.ShowDialog();
                 }
             }
@@ -954,7 +964,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -980,7 +990,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -999,7 +1009,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1016,7 +1026,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1034,7 +1044,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1052,7 +1062,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1070,7 +1080,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1088,7 +1098,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1107,7 +1117,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1168,7 +1178,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1211,63 +1221,63 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
             ImportPbindAssets(effectFile);
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
             ImportPbindAssets(effectFile);
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
             ImportPbindAssets(effectFile);
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
             ImportPbindAssets(effectFile);
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
             ImportPbindAssets(effectFile);
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
             ImportPbindAssets(effectFile);
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
             ImportPbindAssets(effectFile);
         }
 
-        public void PBIND_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
+        public async void PBIND_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
             ImportPbindAssets(effectFile);
         }
 
@@ -1282,7 +1292,7 @@ namespace EEPK_Organiser.View
                 catch (Exception ex)
                 {
                     SaveExceptionLog(ex.ToString());
-                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
@@ -1305,7 +1315,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1323,7 +1333,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1336,7 +1346,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1356,7 +1366,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1372,7 +1382,7 @@ namespace EEPK_Organiser.View
                 {
                     Forms.RecolorAll recolor = new Forms.RecolorAll(AssetType.PBIND, asset, Application.Current.MainWindow);
 
-                    if(recolor.Initialize())
+                    if (recolor.Initialize())
                         recolor.ShowDialog();
                 }
             }
@@ -1380,7 +1390,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -1406,7 +1416,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -1455,7 +1465,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1472,7 +1482,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1490,7 +1500,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1508,7 +1518,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1526,7 +1536,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1544,7 +1554,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1563,7 +1573,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1638,63 +1648,63 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
             ImportTbindAssets(effectFile);
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
             ImportTbindAssets(effectFile);
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
             ImportTbindAssets(effectFile);
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
             ImportTbindAssets(effectFile);
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
             ImportTbindAssets(effectFile);
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
             ImportTbindAssets(effectFile);
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
             ImportTbindAssets(effectFile);
         }
 
-        public void TBIND_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
+        public async void TBIND_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
             ImportTbindAssets(effectFile);
         }
 
@@ -1709,7 +1719,7 @@ namespace EEPK_Organiser.View
                 catch (Exception ex)
                 {
                     SaveExceptionLog(ex.ToString());
-                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
@@ -1728,7 +1738,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1741,7 +1751,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1756,7 +1766,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1772,7 +1782,7 @@ namespace EEPK_Organiser.View
                 {
                     Forms.RecolorAll recolor = new Forms.RecolorAll(AssetType.TBIND, asset, Application.Current.MainWindow);
 
-                    if(recolor.Initialize())
+                    if (recolor.Initialize())
                         recolor.ShowDialog();
                 }
             }
@@ -1780,7 +1790,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -1806,7 +1816,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -1829,7 +1839,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
         }
@@ -1847,7 +1857,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1864,7 +1874,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1882,7 +1892,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1900,7 +1910,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1918,7 +1928,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1936,7 +1946,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1955,7 +1965,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -1982,63 +1992,63 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
             ImportCbindAssets(effectFile);
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
             ImportCbindAssets(effectFile);
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
             ImportCbindAssets(effectFile);
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
             ImportCbindAssets(effectFile);
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
             ImportCbindAssets(effectFile);
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
             ImportCbindAssets(effectFile);
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
             ImportCbindAssets(effectFile);
         }
 
-        public void CBIND_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
+        public async void CBIND_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
             ImportCbindAssets(effectFile);
         }
 
@@ -2053,7 +2063,7 @@ namespace EEPK_Organiser.View
                 catch (Exception ex)
                 {
                     SaveExceptionLog(ex.ToString());
-                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
@@ -2070,11 +2080,11 @@ namespace EEPK_Organiser.View
                 if (!string.IsNullOrWhiteSpace(openFile.FileName) && File.Exists(openFile.FileName))
                 {
                     string newName = effectContainerFile.Cbind.GetUnusedName(System.IO.Path.GetFileName(openFile.FileName));
-
+                    
                     Asset asset = new Asset()
                     {
                         assetType = AssetType.CBIND,
-                        Files = new ObservableCollection<EffectFile>()
+                        Files = new AsyncObservableCollection<EffectFile>()
                         {
                             new EffectFile()
                             {
@@ -2097,7 +2107,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2115,7 +2125,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2128,7 +2138,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2141,7 +2151,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2167,7 +2177,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2183,7 +2193,7 @@ namespace EEPK_Organiser.View
                 {
                     Forms.RecolorAll recolor = new Forms.RecolorAll(AssetType.CBIND, asset, Application.Current.MainWindow);
 
-                    if(recolor.Initialize())
+                    if (recolor.Initialize())
                         recolor.ShowDialog();
                 }
             }
@@ -2191,7 +2201,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -2217,7 +2227,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -2235,7 +2245,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2252,7 +2262,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2270,7 +2280,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2288,7 +2298,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2306,7 +2316,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2324,7 +2334,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 
         }
@@ -2344,7 +2354,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2371,63 +2381,63 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromCMN_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
             ImportLightAssets(effectFile);
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromCharacter_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
             ImportLightAssets(effectFile);
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromSuper_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
             ImportLightAssets(effectFile);
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromUltimate_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
             ImportLightAssets(effectFile);
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromEvasive_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
             ImportLightAssets(effectFile);
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromBlast_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
             ImportLightAssets(effectFile);
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromAwoken_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
             ImportLightAssets(effectFile);
         }
 
-        public void LIGHT_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
+        public async void LIGHT_ImportAsset_MenuItem_FromDemo_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
-            var effectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
+            var effectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
             ImportLightAssets(effectFile);
         }
 
@@ -2442,7 +2452,7 @@ namespace EEPK_Organiser.View
                 catch (Exception ex)
                 {
                     SaveExceptionLog(ex.ToString());
-                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
@@ -2463,7 +2473,7 @@ namespace EEPK_Organiser.View
                     Asset asset = new Asset()
                     {
                         assetType = AssetType.LIGHT,
-                        Files = new ObservableCollection<EffectFile>()
+                        Files = new AsyncObservableCollection<EffectFile>()
                         {
                             new EffectFile()
                             {
@@ -2486,7 +2496,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2504,7 +2514,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2517,7 +2527,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2532,7 +2542,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2558,7 +2568,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -2574,7 +2584,7 @@ namespace EEPK_Organiser.View
                 {
                     Forms.RecolorAll recolor = new Forms.RecolorAll(AssetType.LIGHT, asset, Application.Current.MainWindow);
 
-                    if(recolor.Initialize())
+                    if (recolor.Initialize())
                         recolor.ShowDialog();
                 }
             }
@@ -2582,7 +2592,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -2608,7 +2618,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 #endif
 
@@ -2620,7 +2630,7 @@ namespace EEPK_Organiser.View
         {
             if (importFile == null)
             {
-                importFile = LoadEffectContainerFile();
+                importFile = await LoadEffectContainerFile();
             }
 
             List<IUndoRedo> undos = new List<IUndoRedo>();
@@ -2693,7 +2703,7 @@ namespace EEPK_Organiser.View
 
                                     controller.SetProgress(addedCount);
                                     controller.SetMessage(String.Format("Importing assets: {0} of {1}.", addedCount, assetSelector.SelectedAssets.Count));
-                                    
+
                                     addedCount++;
                                 }
                                 else
@@ -2735,7 +2745,7 @@ namespace EEPK_Organiser.View
                 }
 
                 //Add Undos
-                if(addedCount > 0)
+                if (addedCount > 0)
                 {
                     undos.Add(new UndoActionDelegate(container, nameof(container.UpdateAssetFilter), true));
                     UndoManager.Instance.AddUndo(new CompositeUndo(undos, "Import Asset"));
@@ -3078,7 +3088,7 @@ namespace EEPK_Organiser.View
                 if (selectedEffect != null)
                 {
                     if (selectedEffect.EffectParts == null)
-                        selectedEffect.EffectParts = new System.Collections.ObjectModel.ObservableCollection<EffectPart>();
+                        selectedEffect.EffectParts = new AsyncObservableCollection<EffectPart>();
 
                     var newEffectPart = EffectPart.NewEffectPart();
                     selectedEffect.EffectParts.Add(newEffectPart);
@@ -3089,7 +3099,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3109,7 +3119,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3123,14 +3133,14 @@ namespace EEPK_Organiser.View
                 if (effects != null)
                 {
                     //Add effects
-                    EffectOptions_ImportEffects(new ObservableCollection<Effect>(effects));
+                    EffectOptions_ImportEffects(new AsyncObservableCollection<Effect>(effects));
 
                 }
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3157,7 +3167,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3183,7 +3193,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3213,14 +3223,14 @@ namespace EEPK_Organiser.View
                         }
 
                         undos.Add(new UndoActionDelegate(effectContainerFile, nameof(effectContainerFile.RefreshAssetCounts), true));
-                        UndoManager.Instance.AddUndo(new CompositeUndo(undos, (effectParts.Count > 1) ?  "Paste EffectParts" : "Paste EffectPart"));
+                        UndoManager.Instance.AddUndo(new CompositeUndo(undos, (effectParts.Count > 1) ? "Paste EffectParts" : "Paste EffectPart"));
                     }
                 }
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An unknown error occured while pasting the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An unknown error occured while pasting the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3241,7 +3251,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured while copying the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured while copying the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3272,7 +3282,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3289,7 +3299,9 @@ namespace EEPK_Organiser.View
                     {
                         foreach (var effectPart in selectedEffect.SelectedEffectParts)
                         {
-                            selectedEffect.EffectParts.Add(effectPart.Clone());
+                            var clone = effectPart.Clone();
+                            selectedEffect.EffectParts.Add(clone);
+                            UndoManager.Instance.AddUndo(new UndoableListAdd<EffectPart>(selectedEffect.EffectParts, clone, "Duplicate"));
                         }
                     }
                 }
@@ -3297,7 +3309,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured while duplicating the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured while duplicating the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3347,7 +3359,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3404,13 +3416,13 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured while copying the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured while copying the EffectParts.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         private void EffectPart_DoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if(CanGoToAsset())
+            if (CanGoToAsset())
                 EffectPart_GoToAsset();
         }
 
@@ -3429,7 +3441,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An unknown error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3476,7 +3488,7 @@ namespace EEPK_Organiser.View
             try
             {
                 Effect newEffect = new Effect();
-                newEffect.EffectParts = new ObservableCollection<EffectPart>();
+                newEffect.EffectParts = new AsyncObservableCollection<EffectPart>();
                 newEffect.IndexNum = effectContainerFile.GetUnusedEffectId(0);
                 effectContainerFile.Effects.Add(newEffect);
                 effectDataGrid.SelectedItem = newEffect;
@@ -3494,151 +3506,151 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
 
         }
 
-        public void EffectOptions_ImportEffectsFromFile_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromFile_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                var importEffectFile = LoadEffectContainerFile();
+                var importEffectFile = await LoadEffectContainerFile();
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EffectOptions_ImportEffectsFromCharacter_Click(object sender, RoutedEventArgs e)
-        {
-            if (!GameDirectoryCheck()) return;
-            try
-            {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
-                if (importEffectFile != null)
-                    EffectOptions_ImportEffects(importEffectFile.Effects);
-            }
-            catch (Exception ex)
-            {
-                SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        public void EffectOptions_ImportEffectsFromSuper_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromCharacter_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
             try
             {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Character);
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EffectOptions_ImportEffectsFromUltimate_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromSuper_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
             try
             {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.SuperSkill);
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EffectOptions_ImportEffectsFromEvasive_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromUltimate_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
             try
             {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.UltimateSkill);
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EffectOptions_ImportEffectsFromBlast_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromEvasive_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
             try
             {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.EvasiveSkill);
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EffectOptions_ImportEffectsFromAwoken_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromBlast_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
             try
             {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.BlastSkill);
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EffectOptions_ImportEffectsFromCMN_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromAwoken_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
             try
             {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.AwokenSkill);
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        public void EffectOptions_ImportEffectsFromDemo_Click(object sender, RoutedEventArgs e)
+        public async void EffectOptions_ImportEffectsFromCMN_Click(object sender, RoutedEventArgs e)
         {
             if (!GameDirectoryCheck()) return;
             try
             {
-                var importEffectFile = LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.CMN);
                 if (importEffectFile != null)
                     EffectOptions_ImportEffects(importEffectFile.Effects);
             }
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        public async void EffectOptions_ImportEffectsFromDemo_Click(object sender, RoutedEventArgs e)
+        {
+            if (!GameDirectoryCheck()) return;
+            try
+            {
+                var importEffectFile = await LoadEepkFromGame(Forms.EntitySelector.EntityType.Demo);
+                if (importEffectFile != null)
+                    EffectOptions_ImportEffects(importEffectFile.Effects);
+            }
+            catch (Exception ex)
+            {
+                SaveExceptionLog(ex.ToString());
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -3666,11 +3678,11 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void EffectOptions_ImportEffects(ObservableCollection<Effect> effects)
+        private void EffectOptions_ImportEffects(AsyncObservableCollection<Effect> effects)
         {
             if (effects != null)
             {
@@ -3728,7 +3740,7 @@ namespace EEPK_Organiser.View
         private void ForceSelectEffect(ListBox sender)
         {
             //This may not be required anymore. Need to test. For now just leave disable the function with a return.
-            return; 
+            return;
             try
             {
                 ListBox listBox = sender;
@@ -3752,11 +3764,11 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("ListBox_MouseRightButtonUp: Failed to force select parent effect.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("ListBox_MouseRightButtonUp: Failed to force select parent effect.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
-        private void EffectOptions_ImportEffects_FileDrop(object sender, DragEventArgs e)
+        private async void EffectOptions_ImportEffects_FileDrop(object sender, DragEventArgs e)
         {
             try
             {
@@ -3766,11 +3778,11 @@ namespace EEPK_Organiser.View
 
                     if (droppedFilePaths.Length == 1)
                     {
-                        switch (System.IO.Path.GetExtension(droppedFilePaths[0]))
+                        switch (Path.GetExtension(droppedFilePaths[0]))
                         {
                             case EffectContainerFile.ZipExtension:
                             case ".eepk":
-                                var importEffectFile = LoadEffectContainerFile(droppedFilePaths[0]);
+                                var importEffectFile = await LoadEffectContainerFile(droppedFilePaths[0]);
                                 if (importEffectFile != null)
                                     EffectOptions_ImportEffects(importEffectFile.Effects);
 
@@ -3899,7 +3911,7 @@ namespace EEPK_Organiser.View
 
         public bool GameDirectoryCheck()
         {
-            if (!GeneralInfo.AppSettings.ValidGameDir)
+            if (!SettingsManager.settings.ValidGameDir)
             {
                 MessageBox.Show("Please set the game directory in the settings menu to use this option (File > Settings > Game Directory).", "Invalid Game Directory", MessageBoxButton.OK, MessageBoxImage.Information);
                 return false;
@@ -3953,7 +3965,7 @@ namespace EEPK_Organiser.View
             catch (Exception ex)
             {
                 SaveExceptionLog(ex.ToString());
-                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, GeneralInfo.ERROR_LOG_PATH), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(String.Format("An error occured.\n\nDetails: {0}\n\nA log containing more details about the error was saved at \"{1}\".", ex.Message, SettingsManager.Instance.GetErrorLogPath()), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -4041,7 +4053,7 @@ namespace EEPK_Organiser.View
 
         private void CreateEffectPartViewModel()
         {
-            if(effectContainerFile?.SelectedEffect?.SelectedEffectPart != null)
+            if (effectContainerFile?.SelectedEffect?.SelectedEffectPart != null)
             {
                 if (effectPartViewModel != null) effectPartViewModel.Dispose();
 

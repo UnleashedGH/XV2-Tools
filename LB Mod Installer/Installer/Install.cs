@@ -1311,7 +1311,7 @@ namespace LB_Mod_Installer.Installer
 #endif
         }
 
-        private void Install_ERS(string xmlPath, string installPath)
+        private void Install_ERS(string xmlPath, string installPath, bool isXml)
         {
 #if !DEBUG
             try

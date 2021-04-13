@@ -8,6 +8,7 @@ using YAXLib;
 using Xv2CoreLib.Resource;
 using Xv2CoreLib.AFS2;
 using Xv2CoreLib.CPK;
+using Xv2CoreLib.ACB_NEW;
 
 namespace Xv2CoreLib.UTF
 {
@@ -1623,6 +1624,103 @@ namespace Xv2CoreLib.UTF
             column.Rows[0].Afs2File = afs2;
         }
 
+
+        //AcbFormatHelperTable overloads. These functions will only get/set values if they are supposed to exist.
+        public byte[] GetData(string columnName, string childColumnName, int rowIdx, AcbFormatHelperTable tableHelper, Version version)
+        {
+            try
+            {
+                if (tableHelper.ColumnExists(columnName, TypeFlag.Data, version))
+                    return GetData(columnName, childColumnName, rowIdx);
+            }
+            catch (Exception ex)
+            {
+                if (!AcbFormatHelper.Instance.AcbFormatHelperMain.ForceLoad)
+                    throw ex;
+            }
+
+            return null;
+        }
+
+        public byte[] GetData(string columnName, int rowIdx, AcbFormatHelperTable tableHelper, Version version)
+        {
+            try
+            {
+                if (tableHelper.ColumnExists(columnName, TypeFlag.Data, version))
+                    return GetData(columnName, rowIdx);
+            }
+            catch (Exception ex)
+            {
+                if (!AcbFormatHelper.Instance.AcbFormatHelperMain.ForceLoad)
+                    throw ex;
+            }
+
+            return null;
+        }
+
+        public T GetValue<T>(string columnName, TypeFlag type, int rowIdx, AcbFormatHelperTable tableHelper, Version version)
+        {
+            try
+            {
+                if (tableHelper.ColumnExists(columnName, type, version))
+                    return GetValue<T>(columnName, type, rowIdx);
+            }
+            catch (Exception ex)
+            {
+                if (!AcbFormatHelper.Instance.AcbFormatHelperMain.ForceLoad)
+                    throw ex;
+            }
+
+            return default(T);
+        }
+
+        public T GetValue<T>(string columnName, string childColumnName, TypeFlag type, int rowIdx, AcbFormatHelperTable tableHelper, Version version)
+        {
+            try
+            {
+                if (tableHelper.ColumnExists(columnName, type, version))
+                    return GetValue<T>(columnName, childColumnName, type, rowIdx);
+            }
+            catch (Exception ex)
+            {
+                if (!AcbFormatHelper.Instance.AcbFormatHelperMain.ForceLoad)
+                    throw ex;
+            }
+
+            return default(T);
+        }
+
+        public UTF_File GetColumnTable(string columnName, bool raiseExIfNotFound, AcbFormatHelperTable tableHelper, Version version)
+        {
+            try
+            {
+                if (tableHelper.ColumnExists(columnName, TypeFlag.Data, version))
+                    return GetColumnTable(columnName, raiseExIfNotFound);
+            }
+            catch (Exception ex)
+            {
+                if (!AcbFormatHelper.Instance.AcbFormatHelperMain.ForceLoad)
+                    throw ex;
+            }
+
+            return null;
+        }
+
+        public int AddValue(string columnName, TypeFlag type, int expectedRows, string value, AcbFormatHelperTable tableHelper, Version version)
+        {
+            if (tableHelper.ColumnExists(columnName, type, version))
+                return AddValue(columnName, type, expectedRows, value);
+
+            return -1;
+        }
+
+        public int AddData(string columnName, int expectedRows, byte[] data, AcbFormatHelperTable tableHelper, Version version)
+        {
+            if (tableHelper.ColumnExists(columnName, TypeFlag.Data, version))
+                return AddData(columnName, expectedRows, data);
+
+            return -1;
+        }
 
     }
 

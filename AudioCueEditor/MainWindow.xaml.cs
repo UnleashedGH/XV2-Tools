@@ -241,12 +241,32 @@ namespace AudioCueEditor
             if (!string.IsNullOrWhiteSpace(openFile.FileName))
             {
                 LoadAcb(openFile.FileName);
-
             }
         }
 
-        private async void LoadAcb(string path)
+        public RelayCommand ForceLoadAcbCommand => new RelayCommand(ForceLoadAcb);
+        private async void ForceLoadAcb()
         {
+            await this.ShowMessageAsync("Force Load", "Warning: Force loading disables most validation done on the ACB file when loading, such as checks about if columns exist or not. This can allow some ACBs to load that normally give errors but can also cause major issues!", MessageDialogStyle.Affirmative, DialogSettings.Default);
+
+            OpenFileDialog openFile = new OpenFileDialog();
+            openFile.Title = "Open ACB file...";
+            //openFile.Filter = "ACB File | *.acb";
+            openFile.Filter = string.Format("ACB File | *.acb; *{0}", ACB_File.MUSIC_PACKAGE_EXTENSION, ACB_File.MUSIC_PACKAGE_EXTENSION.ToUpper().Remove(0, 1));
+
+            openFile.ShowDialog(this);
+
+            if (!string.IsNullOrWhiteSpace(openFile.FileName))
+            {
+                LoadAcb(openFile.FileName, true);
+            }
+        }
+
+
+        private async void LoadAcb(string path, bool forceLoad = false)
+        {
+            AcbFormatHelper.Instance.AcbFormatHelperMain.ForceLoad = forceLoad;
+
             var controller = await this.ShowProgressAsync($"Loading \"{System.IO.Path.GetFileName(path)}\"...", $"", false, DialogSettings.Default);
             controller.SetIndeterminate();
 
@@ -425,6 +445,26 @@ namespace AudioCueEditor
             AcbFile.UndoableRandomizeCueIds();
         }
 
+        public RelayCommand FixSilentCuesCommand => new RelayCommand(FixSilentCues, CanFixSilentCues);
+        private async void FixSilentCues()
+        {
+            if (AcbFile != null)
+            {
+                //Confirm
+                var result = await this.ShowMessageAsync("Fix Silent Cues", "This tool is a fixer for old modded ACBs that have become broken with the 1.16 update of DBXV2, with all added tracks now being silent.\n\nFix the ACB?", MessageDialogStyle.AffirmativeAndNegative, DialogSettings.Default);
+
+                if (result != MessageDialogResult.Affirmative) return;
+
+                var undos = AcbFile.AcbFile.AddVolumeBusToCues();
+                UndoManager.Instance.AddCompositeUndo(undos, "Fix Silent Cues");
+            }
+        }
+
+        private bool CanFixSilentCues()
+        {
+            if (!IsAcbLoaded()) return false;
+            return AcbFile.AcbFile.Version >= ACB_File.VolumeBusRequiredVersion;
+        }
 
         private bool IsAcbLoaded()
         {

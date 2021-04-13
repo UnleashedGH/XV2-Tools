@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace LB_Mod_Installer.Properties {
+namespace Xv2CoreLib.Properties {
     using System;
     
     
@@ -39,7 +39,7 @@ namespace LB_Mod_Installer.Properties {
         internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("LB_Mod_Installer.Properties.Resources", typeof(Resources).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Xv2CoreLib.Properties.Resources", typeof(Resources).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
@@ -61,12 +61,28 @@ namespace LB_Mod_Installer.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized resource of type System.Drawing.Icon similar to (Icon).
+        ///   Looks up a localized string similar to &lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+        ///&lt;AcbFormatHelperMain&gt;
+        ///  &lt;Versions&gt;
+        ///    &lt;String&gt;0.81.1.0&lt;/String&gt;
+        ///    &lt;String&gt;0.81.8.0&lt;/String&gt;
+        ///    &lt;String&gt;1.3.0.0&lt;/String&gt;
+        ///    &lt;String&gt;1.6.0.0&lt;/String&gt;
+        ///    &lt;String&gt;1.12.0.0&lt;/String&gt;
+        ///    &lt;String&gt;1.14.0.0&lt;/String&gt;
+        ///    &lt;String&gt;1.16.1.0&lt;/String&gt;
+        ///    &lt;String&gt;1.21.1.0&lt;/String&gt;
+        ///    &lt;String&gt;1.22.4.0&lt;/String&gt;
+        ///    &lt;String&gt;1.23.1.0&lt;/String&gt;
+        ///    &lt;String&gt;1.26.0.0&lt;/String&gt;
+        ///    &lt;String&gt;1.27.2.0&lt;/String&gt;
+        ///    &lt;String&gt;1.27.7.0&lt;/String&gt;
+        ///    &lt;String&gt;1.28.2.0&lt;/String&gt;
+        ///    [rest of string was truncated]&quot;;.
         /// </summary>
-        internal static System.Drawing.Icon DBXV2_101 {
+        internal static string AcbFormatHelper {
             get {
-                object obj = ResourceManager.GetObject("DBXV2_101", resourceCulture);
-                return ((System.Drawing.Icon)(obj));
+                return ResourceManager.GetString("AcbFormatHelper", resourceCulture);
             }
         }
         

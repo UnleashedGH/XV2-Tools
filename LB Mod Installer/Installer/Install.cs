@@ -313,6 +313,8 @@ namespace LB_Mod_Installer.Installer
                 case ".ocs":
                     Install_OCS(xmlPath, installPath);
                     break;
+                case "":
+                    throw new InvalidDataException("xmlPath returned empty, this is likely due to an X2M mod not being installed initially.");
                 default:
                     throw new InvalidDataException(string.Format("The filetype of \"{0}\" is not supported.", xmlPath));
             }
@@ -1608,8 +1610,8 @@ namespace LB_Mod_Installer.Installer
                     return CML_File.Parse(fileIO.GetFileFromGame(path, raiseEx, onlyFromCpk));
                 case ".ocs":
                     return OCS_File.Load(fileIO.GetFileFromGame(path, raiseEx, onlyFromCpk));
-                    
-                    
+                case "":
+                    throw new InvalidDataException("path returned empty, this is likely due to an X2M mod not being installed initially.");
                 default:
                     throw new InvalidDataException(String.Format("GetParsedFileFromGame: The filetype of \"{0}\" is not supported.", path));
             }
@@ -1681,6 +1683,8 @@ namespace LB_Mod_Installer.Installer
                     return ((CharaSlotsFile)data).SaveToBytes();
                 case ".ocs":
                     return ((OCS_File)data).SaveToBytes();
+                case "":
+                    throw new InvalidDataException("path returned empty, this is likely due to an X2M mod not being installed initially.");
                 default:
                     throw new InvalidDataException(String.Format("GetBytesFromParsedFile: The filetype of \"{0}\" is not supported.", path));
             }

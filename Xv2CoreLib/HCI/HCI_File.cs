@@ -131,7 +131,7 @@ namespace Xv2CoreLib.HCI
         { 
             get 
             { 
-                return $"{I_00}_{Costume}_{State1}_{State2}";
+                return $"{I_00}_{Costume}_{State1}_{State2}_{I_08}";
             }
             set
             {
@@ -143,6 +143,7 @@ namespace Xv2CoreLib.HCI
                     Costume = ushort.Parse(split[1]);
                     State1 = ushort.Parse(split[2]);
                     State2 = ushort.Parse(split[3]);
+                    I_08 = (split[4]);
                 }
             }
         }

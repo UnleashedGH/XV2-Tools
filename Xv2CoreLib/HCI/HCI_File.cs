@@ -9,7 +9,7 @@ using YAXLib;
 namespace Xv2CoreLib.HCI
 {
     [YAXSerializeAs("HCI")]
-    public class HCI_File
+    public class HCI_File : ISorting
     {
         private const uint HCI_SIGNATURE = 0x49484323;
 
@@ -62,6 +62,7 @@ namespace Xv2CoreLib.HCI
         /// </summary>
         public static void Write(string xmlPath)
         {
+
             string saveLocation = String.Format("{0}/{1}", Path.GetDirectoryName(xmlPath), Path.GetFileNameWithoutExtension(xmlPath));
             YAXSerializer serializer = new YAXSerializer(typeof(HCI_File), YAXSerializationOptions.DontSerializeNullObjects);
             var oblFile = (HCI_File)serializer.DeserializeFromFile(xmlPath);
@@ -69,12 +70,21 @@ namespace Xv2CoreLib.HCI
             File.WriteAllBytes(saveLocation, oblFile.Write());
         }
 
+
+        public void SortEntries()
+        {
+            Entries = (List<HCI_Entry>)Entries.OrderBy(ch => ch.CharId).ThenByDescending(c => c.Costume)
+                .ThenByDescending(s1 => s1.Costume).ThenByDescending(s2 => s2.Costume);
+        }
+
+
         /// <summary>
         /// Save the HCI_File to the specified path.
         /// </summary>
         /// <param name="path"></param>
         public void Save(string path)
         {
+            SortEntries();
             File.WriteAllBytes(path, Write());
         }
 
